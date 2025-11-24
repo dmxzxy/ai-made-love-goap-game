@@ -33,7 +33,29 @@ function Agent.new(x, y, team, color, unitClass)
     end
     
     -- 根据兵种设置不同属性
-    if unitClass == "Sniper" then
+    if unitClass == "Miner" then
+        -- 矿工：不战斗，专门采集资源
+        self.health = normalRandom(60, 80)
+        self.maxHealth = self.health
+        self.moveSpeed = normalRandom(70, 90)  -- 移动快
+        self.attackDamage = 0  -- 不攻击
+        self.attackRange = 0
+        self.attackSpeed = 0
+        self.critChance = 0
+        self.dodgeChance = normalRandom(0.2, 0.35)  -- 高闪避
+        self.armor = 0
+        self.hasRegen = false
+        self.hasBerserk = false
+        self.radius = 15
+        self.isMiner = true
+        self.miningRate = normalRandom(4, 6)  -- 每秒采集速度
+        self.miningRange = 50  -- 采集范围（必须靠近资源）
+        self.carryCapacity = 50  -- 携带上限
+        self.carriedResources = 0  -- 当前携带资源
+        self.targetResource = nil  -- 目标资源点
+        self.returningToBase = false  -- 是否返回基地
+        
+    elseif unitClass == "Sniper" then
         -- 狙击手：高伤害、超远射程、低血量、慢速
         self.health = normalRandom(60, 80)
         self.maxHealth = self.health
@@ -78,6 +100,76 @@ function Agent.new(x, y, team, color, unitClass)
         self.regenRate = normalRandom(3, 6)
         self.hasBerserk = false
         self.radius = 25  -- 大体型
+        
+    elseif unitClass == "Scout" then
+        -- 侦察兵：超高速度、低血量、中等伤害、高闪避
+        self.health = normalRandom(50, 70)
+        self.maxHealth = self.health
+        self.moveSpeed = normalRandom(120, 160)  -- 超快
+        self.attackDamage = normalRandom(15, 22)
+        self.attackRange = normalRandom(100, 130)
+        self.attackSpeed = normalRandom(0.6, 0.9)
+        self.critChance = normalRandom(0.25, 0.4)  -- 高暴击
+        self.dodgeChance = normalRandom(0.3, 0.5)  -- 超高闪避
+        self.armor = 0
+        self.hasRegen = false
+        self.hasBerserk = false
+        self.radius = 14  -- 小体型
+        
+    elseif unitClass == "Healer" then
+        -- 医疗兵：治疗友军、低战斗力
+        self.health = normalRandom(70, 90)
+        self.maxHealth = self.health
+        self.moveSpeed = normalRandom(60, 80)
+        self.attackDamage = normalRandom(5, 10)  -- 低攻击
+        self.attackRange = normalRandom(80, 100)
+        self.attackSpeed = normalRandom(1.5, 2.0)
+        self.critChance = 0
+        self.dodgeChance = normalRandom(0.15, 0.25)
+        self.armor = normalRandom(0.1, 0.2)
+        self.hasRegen = true
+        self.regenRate = normalRandom(8, 12)  -- 自己高回复
+        self.hasBerserk = false
+        self.radius = 16
+        self.isHealer = true
+        self.healRange = 120  -- 治疗范围
+        self.healRate = normalRandom(15, 25)  -- 治疗速度
+        self.healCooldown = 0
+        
+    elseif unitClass == "Demolisher" then
+        -- 爆破兵：对建筑高伤害、范围伤害
+        self.health = normalRandom(100, 130)
+        self.maxHealth = self.health
+        self.moveSpeed = normalRandom(50, 70)
+        self.attackDamage = normalRandom(35, 50)  -- 高伤害
+        self.attackRange = normalRandom(60, 80)  -- 短射程
+        self.attackSpeed = normalRandom(2.0, 2.5)  -- 攻击慢
+        self.critChance = normalRandom(0.2, 0.3)
+        self.dodgeChance = normalRandom(0.05, 0.1)
+        self.armor = normalRandom(0.15, 0.25)
+        self.hasRegen = false
+        self.hasBerserk = false
+        self.radius = 20
+        self.isDemolisher = true
+        self.splashRange = 80  -- 溅射范围
+        self.baseDamageBonus = 2.0  -- 对基地和建筑2倍伤害
+        
+    elseif unitClass == "Ranger" then
+        -- 游侠：超远射程、移动射击、中等伤害
+        self.health = normalRandom(80, 100)
+        self.maxHealth = self.health
+        self.moveSpeed = normalRandom(80, 110)
+        self.attackDamage = normalRandom(18, 28)
+        self.attackRange = normalRandom(220, 280)  -- 超远射程
+        self.attackSpeed = normalRandom(1.0, 1.4)
+        self.critChance = normalRandom(0.3, 0.45)
+        self.dodgeChance = normalRandom(0.2, 0.3)
+        self.armor = normalRandom(0.05, 0.15)
+        self.hasRegen = false
+        self.hasBerserk = false
+        self.radius = 17
+        self.isRanger = true
+        self.canMoveAndShoot = true  -- 可以边移动边射击
         
     else  -- Soldier - 普通士兵
         self.health = normalRandom(90, 140)
@@ -210,6 +302,12 @@ function Agent:update(dt)
         if dmg.time > 1.5 then
             table.remove(self.damageNumbers, i)
         end
+    end
+    
+    -- 矿工特殊逻辑
+    if self.isMiner then
+        self:updateMinerBehavior(dt)
+        return  -- 矿工不使用GOAP系统
     end
     
     -- 更新世界状态
@@ -628,6 +726,140 @@ function Agent:draw()
         local alpha = 0.5 + math.sin(love.timer.getTime() * 6) * 0.3
         love.graphics.setColor(0, 1, 0, alpha)
         love.graphics.circle("fill", self.x, self.y - self.radius + 5, 3)
+    end
+    
+    -- 矿工特殊显示
+    if self.isMiner then
+        -- 显示到目标资源的连线（采集中）
+        if self.targetResource and not self.returningToBase then
+            local dx = self.targetResource.x - self.x
+            local dy = self.targetResource.y - self.y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance <= self.miningRange then
+                -- 正在采集，显示绿色连线
+                love.graphics.setColor(0, 1, 0, 0.4)
+                love.graphics.setLineWidth(2)
+                love.graphics.line(self.x, self.y, self.targetResource.x, self.targetResource.y)
+                love.graphics.setLineWidth(1)
+                
+                -- 采集动画（粒子效果）
+                local t = love.timer.getTime()
+                for i = 1, 3 do
+                    local progress = (t * 2 + i * 0.3) % 1
+                    local px = self.x + (self.targetResource.x - self.x) * progress
+                    local py = self.y + (self.targetResource.y - self.y) * progress
+                    love.graphics.setColor(1, 0.84, 0, 1 - progress)
+                    love.graphics.circle("fill", px, py, 3)
+                end
+            else
+                -- 正在移动到资源，显示半透明线
+                love.graphics.setColor(0.5, 0.5, 0.5, 0.2)
+                love.graphics.setLineWidth(1)
+                love.graphics.line(self.x, self.y, self.targetResource.x, self.targetResource.y)
+            end
+        end
+        
+        -- 返回基地时显示箭头
+        if self.returningToBase and self.myBase then
+            love.graphics.setColor(0, 0.5, 1, 0.3)
+            love.graphics.setLineWidth(1)
+            love.graphics.line(self.x, self.y, self.myBase.x, self.myBase.y)
+        end
+        
+        -- 显示携带的资源
+        if self.carriedResources > 0 then
+            love.graphics.setColor(1, 0.84, 0, 0.8)
+            love.graphics.circle("fill", self.x + self.radius - 5, self.y - self.radius + 5, 4)
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.print(tostring(math.floor(self.carriedResources)), 
+                self.x + self.radius + 2, self.y - self.radius, 0, 0.6, 0.6)
+        end
+        
+        -- 矿工图标（十字镐）
+        love.graphics.setColor(0.6, 0.4, 0.2)
+        love.graphics.line(self.x - 3, self.y, self.x + 3, self.y)
+        love.graphics.line(self.x, self.y - 3, self.x, self.y + 3)
+    end
+end
+
+-- 矿工行为更新
+function Agent:updateMinerBehavior(dt)
+    -- 碰撞检测
+    self:handleCollisions(dt)
+    
+    -- 如果满载，返回基地
+    if self.carriedResources >= self.carryCapacity then
+        self.returningToBase = true
+        self.targetResource = nil
+    end
+    
+    if self.returningToBase then
+        -- 移动到基地
+        if self.myBase then
+            local dx = self.myBase.x - self.x
+            local dy = self.myBase.y - self.y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance < 60 then
+                -- 到达基地，卸载资源
+                self.myBase.resources = math.min(self.myBase.maxResources, 
+                    self.myBase.resources + self.carriedResources)
+                self.myBase.minerBonus = (self.myBase.minerBonus or 0)  -- 确保有值
+                self.carriedResources = 0
+                self.returningToBase = false
+            else
+                -- 移动向基地
+                local angle = math.atan2(dy, dx)
+                self.x = self.x + math.cos(angle) * self.moveSpeed * dt
+                self.y = self.y + math.sin(angle) * self.moveSpeed * dt
+                self.angle = angle
+            end
+        end
+    else
+        -- 寻找并采集资源
+        if not self.targetResource or self.targetResource.depleted then
+            -- 寻找最近的资源点
+            local nearestResource = nil
+            local nearestDist = math.huge
+            
+            if self.resources then
+                for _, resource in ipairs(self.resources) do
+                    if not resource.depleted then
+                        local dx = resource.x - self.x
+                        local dy = resource.y - self.y
+                        local dist = math.sqrt(dx * dx + dy * dy)
+                        if dist < nearestDist then
+                            nearestDist = dist
+                            nearestResource = resource
+                        end
+                    end
+                end
+            end
+            
+            self.targetResource = nearestResource
+        end
+        
+        if self.targetResource then
+            local dx = self.targetResource.x - self.x
+            local dy = self.targetResource.y - self.y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance <= self.miningRange then
+                -- 必须在范围内才能采集资源
+                local mined = self.targetResource:mine(self.miningRate * dt)
+                self.carriedResources = math.min(self.carryCapacity, self.carriedResources + mined)
+                
+                -- 停止移动，面向资源点
+                self.angle = math.atan2(dy, dx)
+            else
+                -- 距离太远，移动到资源点
+                local angle = math.atan2(dy, dx)
+                self.x = self.x + math.cos(angle) * self.moveSpeed * dt
+                self.y = self.y + math.sin(angle) * self.moveSpeed * dt
+                self.angle = angle
+            end
+        end
     end
 end
 

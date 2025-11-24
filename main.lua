@@ -2,6 +2,7 @@
 local Agent = require("entities.agent")
 local Base = require("entities.base")
 local Resource = require("entities.resource")
+local Barracks = require("entities.barracks")
 
 -- 全局变量
 local redTeam = {}
@@ -15,76 +16,73 @@ local frameCount = 0
 local debugInfo = {}
 local selectedAgent = nil  -- 当前选中的角色
 local selectedBase = nil   -- 当前选中的基地
+local selectedBarracks = nil  -- 当前选中的兵营
 
 function love.load()
-    -- 设置窗口
-    love.window.setTitle("GOAP Battle Game - Base Defense")
-    love.window.setMode(1200, 800)
+    -- 设置窗口（扩大地图）
+    love.window.setTitle("GOAP Battle Game - Strategic Warfare")
+    love.window.setMode(1600, 900)
     
     print("=== Game Loading ===")
     math.randomseed(tostring(os.time()):reverse():sub(1, 7))  -- 设置随机种子
 
-    -- 创建基地
-    redBase = Base.new(100, 400, "red", {1, 0.2, 0.2})
-    blueBase = Base.new(1100, 400, "blue", {0.2, 0.2, 1})
+    -- 创建基地（调整位置适应新地图）
+    redBase = Base.new(120, 450, "red", {1, 0.2, 0.2})
+    blueBase = Base.new(1480, 450, "blue", {0.2, 0.2, 1})
     print("Bases created: Red and Blue")
     
-    -- 创建资源点
+    -- 创建更多资源点（12个）
     resources = {}
-    -- 红方附近的资源
-    table.insert(resources, Resource.new(200, 300))
-    table.insert(resources, Resource.new(200, 500))
-    -- 中间的资源（争夺点）
-    table.insert(resources, Resource.new(600, 250))
-    table.insert(resources, Resource.new(600, 550))
-    -- 蓝方附近的资源
-    table.insert(resources, Resource.new(1000, 300))
-    table.insert(resources, Resource.new(1000, 500))
+    -- 红方区域（4个）
+    table.insert(resources, Resource.new(250, 250))
+    table.insert(resources, Resource.new(250, 450))
+    table.insert(resources, Resource.new(250, 650))
+    table.insert(resources, Resource.new(400, 350))
+    
+    -- 中间争夺区（4个）
+    table.insert(resources, Resource.new(650, 300))
+    table.insert(resources, Resource.new(650, 600))
+    table.insert(resources, Resource.new(950, 300))
+    table.insert(resources, Resource.new(950, 600))
+    
+    -- 蓝方区域（4个）
+    table.insert(resources, Resource.new(1200, 350))
+    table.insert(resources, Resource.new(1350, 250))
+    table.insert(resources, Resource.new(1350, 450))
+    table.insert(resources, Resource.new(1350, 650))
     print(string.format("Created %d resource points", #resources))
     
-    -- 初始单位数量（双方相同）
+    -- 初始单位数量（双方相同，都是矿工保证公平）
     local initialCount = 3
-    print(string.format("Initial units per team: %d", initialCount))
+    print(string.format("Initial units per team: %d Miners (for fairness)", initialCount))
     
-    -- 随机选择兵种的函数
-    local function getRandomUnitClass()
-        local rand = math.random()
-        if rand < 0.5 then
-            return "Soldier"  -- 50% 普通士兵
-        elseif rand < 0.7 then
-            return "Sniper"   -- 20% 狙击手
-        elseif rand < 0.9 then
-            return "Gunner"   -- 20% 机枪手
-        else
-            return "Tank"     -- 10% 坦克兵
-        end
-    end
-    
-    -- 创建红队初始单位
+    -- 创建红队初始单位（全部矿工）
     for i = 1, initialCount do
         local x, y = redBase:getSpawnPosition()
         y = y + (i - 2) * 60  -- 垂直分布
-        local unitClass = getRandomUnitClass()
-        local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitClass)
+        local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, "Miner")
         agent.angle = 0  -- 朝向右边
+        agent.myBase = redBase
+        agent.resources = resources
         table.insert(redTeam, agent)
-        print(string.format("Red #%d [%s]: HP=%.0f ATK=%.0f RNG=%.0f", 
-            i, unitClass, agent.health, agent.attackDamage, agent.attackRange))
+        print(string.format("Red #%d [Miner]: HP=%.0f Speed=%.0f", 
+            i, agent.health, agent.moveSpeed))
     end
     
-    -- 创建蓝队初始单位
+    -- 创建蓝队初始单位（全部矿工）
     for i = 1, initialCount do
         local x, y = blueBase:getSpawnPosition()
         y = y + (i - 2) * 60  -- 垂直分布
-        local unitClass = getRandomUnitClass()
-        local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, unitClass)
+        local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, "Miner")
         agent.angle = math.pi  -- 朝向左边
+        agent.myBase = blueBase
+        agent.resources = resources
         table.insert(blueTeam, agent)
-        print(string.format("Blue #%d [%s]: HP=%.0f ATK=%.0f RNG=%.0f", 
-            i, unitClass, agent.health, agent.attackDamage, agent.attackRange))
+        print(string.format("Blue #%d [Miner]: HP=%.0f Speed=%.0f", 
+            i, agent.health, agent.moveSpeed))
     end
     
-    -- 设置引用
+    -- 设置引用（矿工不需要敌人引用，但保留以便后续战斗单位使用）
     for _, agent in ipairs(redTeam) do
         agent.enemies = blueTeam
         agent.allies = redTeam
@@ -97,6 +95,7 @@ function love.load()
     end
     
     print("=== Game Loaded ===")
+
 end
 
 function love.update(dt)
@@ -113,33 +112,70 @@ function love.update(dt)
     
     -- 更新基地和生产单位
     local redAlive = 0
+    local redMiners = 0
     for _, agent in ipairs(redTeam) do
         if agent.health > 0 and not agent.isDead then
             redAlive = redAlive + 1
+            if agent.isMiner then
+                redMiners = redMiners + 1
+            end
         end
     end
     
     local blueAlive = 0
+    local blueMiners = 0
     for _, agent in ipairs(blueTeam) do
         if agent.health > 0 and not agent.isDead then
             blueAlive = blueAlive + 1
+            if agent.isMiner then
+                blueMiners = blueMiners + 1
+            end
         end
     end
     
+    -- 重置矿工加成（每帧重新计算）
+    redBase.minerBonus = redMiners * 2  -- 每个矿工提供+2采集速度
+    blueBase.minerBonus = blueMiners * 2
+    
     -- 更新红方基地
-    local shouldSpawnRed, unitClass = redBase:update(dt, redAlive, resources)
+    local shouldSpawnRed, unitClass = redBase:update(dt, redAlive, resources, redMiners)
     if shouldSpawnRed and unitClass and redAlive < redBase.maxUnits then
-        local x, y = redBase:getSpawnPosition()        local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitClass)
+        local x, y = redBase:getSpawnPosition()
+        local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitClass)
         agent.angle = 0
         agent.enemies = blueTeam
         agent.allies = redTeam
         agent.enemyBase = blueBase
+        agent.myBase = redBase
+        agent.resources = resources
         table.insert(redTeam, agent)
-        print(string.format("[Red] %s spawned! Total: %d", unitClass, redAlive + 1))
+        print(string.format("[Red] %s spawned! Total: %d (Miners: %d)", unitClass, redAlive + 1, redMiners))
+    end
+    
+    -- 红方兵营自动建造和生产
+    if frameCount % 300 == 0 then  -- 每5秒尝试建造兵营
+        redBase:tryAutoBuildBarracks(Barracks)
+    end
+    
+    for i, barracks in ipairs(redBase.barracks) do
+        local shouldSpawn, unitType, cost = barracks:update(dt, redBase.resources)
+        if shouldSpawn and unitType and redAlive < redBase.maxUnits then
+            redBase.resources = redBase.resources - cost
+            local x, y = barracks:getSpawnPosition()
+            local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitType)
+            agent.angle = 0
+            agent.enemies = blueTeam
+            agent.allies = redTeam
+            agent.enemyBase = blueBase
+            agent.myBase = redBase
+            agent.resources = resources
+            table.insert(redTeam, agent)
+            print(string.format("[Red Barracks %d] %s spawned! Total: %d", i, unitType, redAlive + 1))
+        end
     end
     
     -- 更新蓝方基地
-    local shouldSpawnBlue, unitClassBlue = blueBase:update(dt, blueAlive, resources)
+    local shouldSpawnBlue, unitClassBlue = blueBase:update(dt, blueAlive, resources, blueMiners)
     if shouldSpawnBlue and unitClassBlue and blueAlive < blueBase.maxUnits then
         local x, y = blueBase:getSpawnPosition()
         local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, unitClassBlue)
@@ -147,8 +183,32 @@ function love.update(dt)
         agent.enemies = redTeam
         agent.allies = blueTeam
         agent.enemyBase = redBase
+        agent.myBase = blueBase
+        agent.resources = resources
         table.insert(blueTeam, agent)
-        print(string.format("[Blue] %s spawned! Total: %d", unitClassBlue, blueAlive + 1))
+        print(string.format("[Blue] %s spawned! Total: %d (Miners: %d)", unitClassBlue, blueAlive + 1, blueMiners))
+    end
+    
+    -- 蓝方兵营自动建造和生产
+    if frameCount % 300 == 0 then  -- 每5秒尝试建造兵营
+        blueBase:tryAutoBuildBarracks(Barracks)
+    end
+    
+    for i, barracks in ipairs(blueBase.barracks) do
+        local shouldSpawn, unitType, cost = barracks:update(dt, blueBase.resources)
+        if shouldSpawn and unitType and blueAlive < blueBase.maxUnits then
+            blueBase.resources = blueBase.resources - cost
+            local x, y = barracks:getSpawnPosition()
+            local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, unitType)
+            agent.angle = math.pi
+            agent.enemies = redTeam
+            agent.allies = blueTeam
+            agent.enemyBase = redBase
+            agent.myBase = blueBase
+            agent.resources = resources
+            table.insert(blueTeam, agent)
+            print(string.format("[Blue Barracks %d] %s spawned! Total: %d", i, unitType, blueAlive + 1))
+        end
     end
     
     -- 更新所有单位
@@ -181,17 +241,26 @@ function love.draw()
     -- 背景
     love.graphics.setBackgroundColor(0.1, 0.1, 0.15)
     
-    -- 绘制分隔线
+    -- 绘制分隔线（居中）
     love.graphics.setColor(0.3, 0.3, 0.3)
-    love.graphics.line(600, 0, 600, 800)
+    love.graphics.line(800, 0, 800, 900)
     
     -- 绘制标题
     love.graphics.setColor(1, 1, 1)
+    love.graphics.print("GOAP Battle - Strategic Warfare", 20, 20, 0, 2, 2)
     love.graphics.print("GOAP Battle - Base Defense", 20, 20, 0, 2, 2)
     
     -- 绘制基地
     redBase:draw()
     blueBase:draw()
+    
+    -- 绘制兵营
+    for _, barracks in ipairs(redBase.barracks) do
+        barracks:draw()
+    end
+    for _, barracks in ipairs(blueBase.barracks) do
+        barracks:draw()
+    end
     
     -- 绘制资源节点
     for _, resource in ipairs(resources) do
@@ -206,15 +275,19 @@ function love.draw()
             debugInfo.redAlive, redBase.maxUnits), 50, 85, 0, 1, 1)
         love.graphics.print(string.format("Base: %.0f/%.0f", 
             debugInfo.redBaseHP or 0, redBase.maxHealth), 50, 105, 0, 1, 1)
+        love.graphics.print(string.format("Barracks: %d/%d", 
+            #redBase.barracks, redBase.maxBarracks), 50, 125, 0, 1, 1)
     end
     
     love.graphics.setColor(0.2, 0.2, 1)
-    love.graphics.print("Blue Team", 1000, 60, 0, 1.5, 1.5)
+    love.graphics.print("Blue Team", 1400, 60, 0, 1.5, 1.5)
     if debugInfo.blueAlive then
         love.graphics.print(string.format("Units: %d/%d", 
-            debugInfo.blueAlive, blueBase.maxUnits), 1000, 85, 0, 1, 1)
+            debugInfo.blueAlive, blueBase.maxUnits), 1400, 85, 0, 1, 1)
         love.graphics.print(string.format("Base: %.0f/%.0f", 
-            debugInfo.blueBaseHP or 0, blueBase.maxHealth), 1000, 105, 0, 1, 1)
+            debugInfo.blueBaseHP or 0, blueBase.maxHealth), 1400, 105, 0, 1, 1)
+        love.graphics.print(string.format("Barracks: %d/%d", 
+            #blueBase.barracks, blueBase.maxBarracks), 1400, 125, 0, 1, 1)
     end
     
     -- 绘制所有单位
@@ -531,6 +604,114 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, 0.8)
         love.graphics.print("Click anywhere to close", infoX + 150, infoY + infoHeight - 35, 0, 1.2, 1.2)
     end
+    
+    -- 绘制兵营信息面板
+    if selectedBarracks and not selectedBarracks.isDead then
+        local infoX, infoY = 50, 150
+        local infoWidth, infoHeight = 500, 400
+        
+        -- 半透明背景
+        love.graphics.setColor(0, 0, 0, 0.85)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 10, 10)
+        
+        -- 边框
+        love.graphics.setColor(selectedBarracks.color)
+        love.graphics.setLineWidth(3)
+        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 10, 10)
+        love.graphics.setLineWidth(1)
+        
+        -- 标题
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("=== BARRACKS INFO ===", infoX + 140, infoY + 15, 0, 1.5, 1.5)
+        
+        local y = infoY + 50
+        local lineHeight = 25
+        
+        -- 兵营信息
+        love.graphics.setColor(selectedBarracks.teamColor)
+        love.graphics.print(string.format("%s - %s Team", selectedBarracks.name, 
+            selectedBarracks.team:upper()), infoX + 40, y, 0, 1.3, 1.3)
+        
+        y = y + lineHeight + 10
+        
+        if selectedBarracks.isBuilding then
+            -- 建造中
+            love.graphics.setColor(1, 0.8, 0.2)
+            love.graphics.print("STATUS: UNDER CONSTRUCTION", infoX + 40, y, 0, 1.2, 1.2)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.5, 1, 0.5)
+            love.graphics.print(string.format("Build Progress: %.0f%%", 
+                (selectedBarracks.buildProgress / selectedBarracks.buildTime) * 100), 
+                infoX + 40, y, 0, 1.1, 1.1)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.7, 0.7, 0.7)
+            love.graphics.print(string.format("Time Remaining: %.1f seconds", 
+                selectedBarracks.buildTime - selectedBarracks.buildProgress), 
+                infoX + 40, y, 0, 1, 1)
+        else
+            -- 已完成
+            love.graphics.setColor(0.3, 1, 0.3)
+            love.graphics.print("STATUS: OPERATIONAL", infoX + 40, y, 0, 1.2, 1.2)
+            
+            y = y + lineHeight + 10
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.print("--- Production Details ---", infoX + 40, y, 0, 1.2, 1.2)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.5, 1, 1)
+            love.graphics.print(string.format("Produces: %s", selectedBarracks.producesUnit), 
+                infoX + 40, y, 0, 1.1, 1.1)
+            
+            y = y + lineHeight
+            love.graphics.setColor(1, 0.84, 0)
+            love.graphics.print(string.format("Production Cost: $%d", 
+                selectedBarracks.productionCost), infoX + 40, y, 0, 1.1, 1.1)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.8, 0.8, 1)
+            love.graphics.print(string.format("Production Time: %.1f seconds", 
+                selectedBarracks.productionTime), infoX + 40, y, 0, 1.1, 1.1)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.8, 1, 0.8)
+            love.graphics.print(string.format("Units Produced: %d", 
+                selectedBarracks.unitsProduced), infoX + 40, y, 0, 1.1, 1.1)
+            
+            if selectedBarracks.isProducing then
+                y = y + lineHeight
+                love.graphics.setColor(0.3, 1, 1)
+                love.graphics.print(string.format("Current Production: %.0f%%", 
+                    (selectedBarracks.productionProgress / selectedBarracks.productionTime) * 100), 
+                    infoX + 40, y, 0, 1.1, 1.1)
+            end
+        end
+        
+        y = y + lineHeight + 15
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("--- Structure Stats ---", infoX + 40, y, 0, 1.2, 1.2)
+        
+        y = y + lineHeight
+        love.graphics.setColor(0.3, 1, 0.3)
+        love.graphics.print(string.format("Health: %.0f / %.0f (%.0f%%)", 
+            selectedBarracks.health, selectedBarracks.maxHealth,
+            (selectedBarracks.health / selectedBarracks.maxHealth) * 100), 
+            infoX + 40, y, 0, 1.1, 1.1)
+        
+        y = y + lineHeight
+        love.graphics.setColor(1, 1, 0.7)
+        love.graphics.print(string.format("Position: (%.0f, %.0f)", 
+            selectedBarracks.x, selectedBarracks.y), infoX + 40, y, 0, 1.1, 1.1)
+        
+        y = y + lineHeight + 10
+        love.graphics.setColor(0.8, 0.8, 0.8)
+        love.graphics.print(selectedBarracks.description, infoX + 40, y, 0, 1, 1)
+        
+        -- 关闭提示
+        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.print("Click anywhere to close", infoX + 150, infoY + infoHeight - 35, 0, 1.2, 1.2)
+    end
 end
 
 function love.keypressed(key)
@@ -544,6 +725,7 @@ function love.keypressed(key)
         winner = nil
         selectedAgent = nil
         selectedBase = nil
+        selectedBarracks = nil
         frameCount = 0
         love.load()
     elseif key == "escape" then
@@ -554,10 +736,32 @@ end
 function love.mousepressed(x, y, button)
     if button == 1 then  -- 左键点击
         -- 如果已经有选中的对象，点击任何地方都关闭信息面板
-        if selectedAgent or selectedBase then
+        if selectedAgent or selectedBase or selectedBarracks then
             selectedAgent = nil
             selectedBase = nil
+            selectedBarracks = nil
             return
+        end
+        
+        -- 检查是否点击了兵营
+        for _, barracks in ipairs(redBase.barracks) do
+            if not barracks.isDead then
+                if x >= barracks.x - barracks.size/2 and x <= barracks.x + barracks.size/2 and
+                   y >= barracks.y - barracks.size/2 and y <= barracks.y + barracks.size/2 then
+                    selectedBarracks = barracks
+                    return
+                end
+            end
+        end
+        
+        for _, barracks in ipairs(blueBase.barracks) do
+            if not barracks.isDead then
+                if x >= barracks.x - barracks.size/2 and x <= barracks.x + barracks.size/2 and
+                   y >= barracks.y - barracks.size/2 and y <= barracks.y + barracks.size/2 then
+                    selectedBarracks = barracks
+                    return
+                end
+            end
         end
         
         -- 检查是否点击了基地

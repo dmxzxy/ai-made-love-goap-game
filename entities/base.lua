@@ -18,25 +18,38 @@ function Base.new(x, y, team, color)
     
     -- 资源系统
     self.resources = 200  -- 初始资源
-    self.maxResources = 500  -- 最大资源存储
+    self.maxResources = 800  -- 最大资源存储（提高上限）
     self.miningRange = 150  -- 采集范围
-    self.miningRate = 5  -- 每秒采集速度
+    self.miningRate = 3  -- 基础每秒采集速度（降低基础速度）
     self.nearbyResources = {}  -- 范围内的资源点
+    self.minerBonus = 0  -- 矿工提供的额外采集速度
     
     -- 生产系统和成本
     self.productionCooldown = 0
     self.productionTime = 8  -- 基础生产时间
-    self.maxUnits = 10  -- 最大单位数量限制
+    self.maxUnits = 25  -- 最大单位数量限制（提高到25）
     self.unitsProduced = 0
     self.currentProduction = nil  -- 当前生产的兵种
     
     -- 兵种成本
     self.unitCosts = {
-        Soldier = 50,
-        Sniper = 80,
-        Gunner = 70,
-        Tank = 100
+        Miner = 40,      -- 矿工：便宜的经济单位
+        Soldier = 50,    -- 士兵：基础战斗单位
+        Scout = 55,      -- 侦察兵：快速单位
+        Gunner = 70,     -- 机枪手：火力压制
+        Sniper = 80,     -- 狙击手：远程精准
+        Healer = 75,     -- 医疗兵：辅助治疗
+        Tank = 100,      -- 坦克：重装单位
+        Demolisher = 90, -- 爆破兵：攻城单位
+        Ranger = 85      -- 游侠：超远程
     }
+    
+    -- 兵营系统
+    self.barracks = {}  -- 建造的兵营列表
+    self.maxBarracks = 6  -- 最大兵营数量（提高到6）
+    self.barracksBuildQueue = {}  -- 兵营建造队列
+    self.isConstructing = false
+    self.constructionProgress = 0
     
     -- 视觉效果
     self.flashTime = 0
@@ -49,7 +62,7 @@ function Base.new(x, y, team, color)
     return self
 end
 
-function Base:update(dt, currentUnitCount, resources)
+function Base:update(dt, currentUnitCount, resources, minerCount)
     if self.isDead then
         self.deathTime = self.deathTime + dt
         return nil, nil
@@ -70,6 +83,8 @@ function Base:update(dt, currentUnitCount, resources)
     -- 自动采集附近的资源
     self.nearbyResources = resources or {}
     local mined = 0
+    local totalMiningRate = self.miningRate + self.minerBonus  -- 基础速度 + 矿工加成
+    
     for _, resource in ipairs(self.nearbyResources) do
         if not resource.depleted then
             local dx = resource.x - self.x
@@ -77,7 +92,7 @@ function Base:update(dt, currentUnitCount, resources)
             local distance = math.sqrt(dx * dx + dy * dy)
             
             if distance <= self.miningRange then
-                local amount = self.miningRate * dt
+                local amount = totalMiningRate * dt
                 local actualMined = resource:mine(amount)
                 mined = mined + actualMined
             end
@@ -93,7 +108,7 @@ function Base:update(dt, currentUnitCount, resources)
     if currentUnitCount < self.maxUnits then
         -- 如果没有当前生产，选择一个兵种开始生产
         if not self.currentProduction then
-            self.currentProduction = self:chooseUnitToProduce()
+            self.currentProduction = self:chooseUnitToProduce(minerCount)
         end
         
         if self.currentProduction then
@@ -130,21 +145,47 @@ function Base:update(dt, currentUnitCount, resources)
 end
 
 -- 选择要生产的兵种（基于策略）
-function Base:chooseUnitToProduce()
-    -- 简单策略：根据资源量和随机性选择
+function Base:chooseUnitToProduce(minerCount)
+    minerCount = minerCount or 0
+    
+    -- 前期优先生产矿工发展经济
+    if minerCount < 3 and self.resources >= 40 then
+        return "Miner"
+    end
+    
+    -- 策略：根据资源量和随机性选择多样化兵种
     local rand = math.random()
     
     if self.resources < 60 then
-        -- 资源不足，只能生产士兵
-        return "Soldier"
+        -- 资源不足，生产矿工或士兵
+        if minerCount < 5 and rand < 0.4 then
+            return "Miner"
+        elseif rand < 0.7 then
+            return "Soldier"
+        else
+            return "Scout"  -- 便宜的快速单位
+        end
+    end
+    
+    -- 丰富的兵种组合
+    if minerCount < 5 and rand < 0.1 then
+        return "Miner"  -- 10% 继续补充矿工
     elseif self.resources >= 100 and rand < 0.15 then
-        return "Tank"  -- 15% 坦克
-    elseif self.resources >= 80 and rand < 0.35 then
-        return "Sniper"  -- 20% 狙击手
-    elseif self.resources >= 70 and rand < 0.55 then
-        return "Gunner"  -- 20% 机枪手
+        return "Tank"  -- 5% 坦克
+    elseif self.resources >= 90 and rand < 0.22 then
+        return "Demolisher"  -- 7% 爆破兵
+    elseif self.resources >= 85 and rand < 0.30 then
+        return "Ranger"  -- 8% 游侠
+    elseif self.resources >= 80 and rand < 0.42 then
+        return "Sniper"  -- 12% 狙击手
+    elseif self.resources >= 75 and rand < 0.52 then
+        return "Healer"  -- 10% 医疗兵
+    elseif self.resources >= 70 and rand < 0.67 then
+        return "Gunner"  -- 15% 机枪手
+    elseif self.resources >= 55 and rand < 0.80 then
+        return "Scout"  -- 13% 侦察兵
     else
-        return "Soldier"  -- 45% 士兵
+        return "Soldier"  -- 20% 士兵
     end
 end
 
@@ -277,6 +318,105 @@ end
 function Base:getSpawnPosition()
     local offsetX = (self.team == "red") and 80 or -80
     return self.x + offsetX, self.y + math.random(-30, 30)
+end
+
+-- 建造兵营
+function Base:buildBarracks(barracksType, Barracks)
+    if #self.barracks >= self.maxBarracks then
+        print(string.format("[%s] Cannot build more barracks! (Max: %d)", 
+            self.team:upper(), self.maxBarracks))
+        return false
+    end
+    
+    local barracksData = Barracks.types[barracksType]
+    if not barracksData then
+        print(string.format("[%s] Invalid barracks type: %s", 
+            self.team:upper(), barracksType))
+        return false
+    end
+    
+    if self.resources < barracksData.cost then
+        print(string.format("[%s] Not enough resources to build %s! Need: $%d, Have: $%d", 
+            self.team:upper(), barracksData.name, barracksData.cost, self.resources))
+        return false
+    end
+    
+    -- 计算兵营位置（采用网格布局避免重叠）
+    local barracksCount = #self.barracks
+    local row = math.floor(barracksCount / 3)  -- 每行3个
+    local col = barracksCount % 3
+    
+    -- 基地左右两侧布局
+    local offsetX = (self.team == "red") and 1 or -1
+    local baseX = self.x + offsetX * (150 + col * 100)  -- 横向间隔100
+    local baseY = self.y - 100 + row * 120  -- 纵向间隔120
+    
+    local barrackX = baseX
+    local barrackY = baseY
+    
+    -- 创建兵营
+    local barracks = Barracks.new(barrackX, barrackY, barracksType, self.team, self.color)
+    table.insert(self.barracks, barracks)
+    
+    -- 扣除资源
+    self.resources = self.resources - barracksData.cost
+    
+    print(string.format("[%s] Building %s at position %d (Cost: $%d, Remaining: $%d)", 
+        self.team:upper(), barracksData.name, #self.barracks, 
+        barracksData.cost, self.resources))
+    
+    return true
+end
+
+-- 尝试自动建造兵营
+function Base:tryAutoBuildBarracks(Barracks)
+    if #self.barracks >= self.maxBarracks then
+        return false
+    end
+    
+    -- 所有可用的兵营类型
+    local allBarracksTypes = {"Infantry", "Armory", "Sniper", "Heavy", "ScoutCamp", "Hospital", "Workshop", "RangerPost"}
+    
+    -- 优先建造步兵营房（最便宜且实用）
+    if #self.barracks == 0 and self.resources >= 150 then
+        return self:buildBarracks("Infantry", Barracks)
+    end
+    
+    -- 第二个建造侦察营（便宜且快速）
+    if #self.barracks == 1 and self.resources >= 140 then
+        return self:buildBarracks("ScoutCamp", Barracks)
+    end
+    
+    -- 之后根据资源随机建造多样化兵营
+    if self.resources >= 250 then
+        local rand = math.random()
+        local barrackType
+        
+        if rand < 0.15 then
+            barrackType = "Infantry"
+        elseif rand < 0.28 then
+            barrackType = "ScoutCamp"
+        elseif rand < 0.40 then
+            barrackType = "Armory"
+        elseif rand < 0.52 then
+            barrackType = "Sniper"
+        elseif rand < 0.64 then
+            barrackType = "RangerPost"
+        elseif rand < 0.76 then
+            barrackType = "Hospital"
+        elseif rand < 0.88 then
+            barrackType = "Workshop"
+        else
+            barrackType = "Heavy"
+        end
+        
+        local barracksData = Barracks.types[barrackType]
+        if self.resources >= barracksData.cost then
+            return self:buildBarracks(barrackType, Barracks)
+        end
+    end
+    
+    return false
 end
 
 return Base
