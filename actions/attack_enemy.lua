@@ -79,7 +79,7 @@ function AttackEnemy:perform(agent, dt)
     
     -- 攻击
     local damage = agent.attackDamage
-    local actualDamage = agent.target:takeDamage(damage, isCrit)
+    local actualDamage = agent.target:takeDamage(damage, isCrit, agent)  -- 传递攻击者
     self.attackCooldown = agent.attackSpeed
     
     -- 创建攻击特效

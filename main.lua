@@ -3,6 +3,7 @@ local Agent = require("entities.agent")
 local Base = require("entities.base")
 local Resource = require("entities.resource")
 local Barracks = require("entities.barracks")
+local Tower = require("entities.tower")
 
 -- 全局变量
 local redTeam = {}
@@ -17,43 +18,98 @@ local debugInfo = {}
 local selectedAgent = nil  -- 当前选中的角色
 local selectedBase = nil   -- 当前选中的基地
 local selectedBarracks = nil  -- 当前选中的兵营
+local selectedTower = nil  -- 当前选中的防御塔
+
+-- 战斗数据统计
+local battleStats = {
+    red = {
+        kills = 0,
+        deaths = 0,
+        damageDealt = 0,
+        damageReceived = 0,
+        unitsProduced = 0,
+        goldSpent = 0,
+        goldMined = 0,
+        buildingsBuilt = 0,
+        towerKills = 0
+    },
+    blue = {
+        kills = 0,
+        deaths = 0,
+        damageDealt = 0,
+        damageReceived = 0,
+        unitsProduced = 0,
+        goldSpent = 0,
+        goldMined = 0,
+        buildingsBuilt = 0,
+        towerKills = 0
+    }
+}
+
+-- 摄像机系统
+local camera = {
+    x = 600,         -- 摄像机初始偏移X（看向中间偏左）
+    y = 300,         -- 摄像机初始偏移Y（看向中间偏上）
+    scale = 0.8,     -- 初始缩放比例（缩小以看到更大视野）
+    minScale = 0.3,  -- 最小缩放（可以看到整个战场）
+    maxScale = 2.0,  -- 最大缩放
+    isDragging = false,
+    dragStartX = 0,
+    dragStartY = 0,
+    dragStartCamX = 0,
+    dragStartCamY = 0
+}
 
 function love.load()
-    -- 设置窗口（扩大地图）
+    -- 设置窗口
     love.window.setTitle("GOAP Battle Game - Strategic Warfare")
-    love.window.setMode(1600, 900)
+    love.window.setMode(1600, 900)  -- 标准窗口
+    
+    -- 实际游戏世界更大（可以通过摄像机浏览）
+    WORLD_WIDTH = 2400
+    WORLD_HEIGHT = 1200
     
     print("=== Game Loading ===")
     math.randomseed(tostring(os.time()):reverse():sub(1, 7))  -- 设置随机种子
 
+    -- 重置战斗统计
+    battleStats = {
+        red = {kills = 0, deaths = 0, damageDealt = 0, damageReceived = 0, unitsProduced = 0, goldSpent = 0, goldMined = 0, buildingsBuilt = 0, towerKills = 0},
+        blue = {kills = 0, deaths = 0, damageDealt = 0, damageReceived = 0, unitsProduced = 0, goldSpent = 0, goldMined = 0, buildingsBuilt = 0, towerKills = 0}
+    }
+
     -- 创建基地（调整位置适应新地图）
-    redBase = Base.new(120, 450, "red", {1, 0.2, 0.2})
-    blueBase = Base.new(1480, 450, "blue", {0.2, 0.2, 1})
+    redBase = Base.new(150, 600, "red", {1, 0.2, 0.2})
+    blueBase = Base.new(2250, 600, "blue", {0.2, 0.2, 1})
     print("Bases created: Red and Blue")
     
-    -- 创建更多资源点（12个）
+    -- 创建更多资源点（16个，优化分布更均匀）
     resources = {}
-    -- 红方区域（4个）
-    table.insert(resources, Resource.new(250, 250))
-    table.insert(resources, Resource.new(250, 450))
-    table.insert(resources, Resource.new(250, 650))
-    table.insert(resources, Resource.new(400, 350))
+    -- 红方区域资源（5个）
+    table.insert(resources, Resource.new(250, 300))
+    table.insert(resources, Resource.new(250, 600))
+    table.insert(resources, Resource.new(250, 900))
+    table.insert(resources, Resource.new(450, 450))
+    table.insert(resources, Resource.new(450, 750))
     
-    -- 中间争夺区（4个）
-    table.insert(resources, Resource.new(650, 300))
-    table.insert(resources, Resource.new(650, 600))
-    table.insert(resources, Resource.new(950, 300))
-    table.insert(resources, Resource.new(950, 600))
+    -- 中立区资源（6个，增加争夺性）
+    table.insert(resources, Resource.new(800, 200))
+    table.insert(resources, Resource.new(800, 600))
+    table.insert(resources, Resource.new(800, 1000))
+    table.insert(resources, Resource.new(1600, 200))
+    table.insert(resources, Resource.new(1600, 600))
+    table.insert(resources, Resource.new(1600, 1000))
     
-    -- 蓝方区域（4个）
-    table.insert(resources, Resource.new(1200, 350))
-    table.insert(resources, Resource.new(1350, 250))
-    table.insert(resources, Resource.new(1350, 450))
-    table.insert(resources, Resource.new(1350, 650))
+    -- 蓝方区域资源（5个）
+    table.insert(resources, Resource.new(1950, 450))
+    table.insert(resources, Resource.new(1950, 750))
+    table.insert(resources, Resource.new(2150, 300))
+    table.insert(resources, Resource.new(2150, 600))
+    table.insert(resources, Resource.new(2150, 900))
     print(string.format("Created %d resource points", #resources))
     
-    -- 初始单位数量（双方相同，都是矿工保证公平）
-    local initialCount = 3
+    -- 初始单位数量（增加到5个矿工）
+    local initialCount = 5
     print(string.format("Initial units per team: %d Miners (for fairness)", initialCount))
     
     -- 创建红队初始单位（全部矿工）
@@ -87,11 +143,13 @@ function love.load()
         agent.enemies = blueTeam
         agent.allies = redTeam
         agent.enemyBase = blueBase
+        agent.enemyTowers = blueBase.towers
     end
     for _, agent in ipairs(blueTeam) do
         agent.enemies = redTeam
         agent.allies = blueTeam
         agent.enemyBase = redBase
+        agent.enemyTowers = redBase.towers
     end
     
     print("=== Game Loaded ===")
@@ -146,9 +204,11 @@ function love.update(dt)
         agent.enemies = blueTeam
         agent.allies = redTeam
         agent.enemyBase = blueBase
+        agent.enemyTowers = blueBase.towers
         agent.myBase = redBase
         agent.resources = resources
         table.insert(redTeam, agent)
+        battleStats.red.unitsProduced = battleStats.red.unitsProduced + 1
         print(string.format("[Red] %s spawned! Total: %d (Miners: %d)", unitClass, redAlive + 1, redMiners))
     end
     
@@ -157,19 +217,36 @@ function love.update(dt)
         redBase:tryAutoBuildBarracks(Barracks)
     end
     
+    -- 红方防御塔自动建造（每10秒尝试）
+    if frameCount % 600 == 100 then
+        redBase:tryAutoBuildTower(Tower)
+    end
+    
+    -- 更新红方防御塔
+    for i = #redBase.towers, 1, -1 do
+        local tower = redBase.towers[i]
+        tower:update(dt, blueTeam)
+        if tower.isDead then
+            table.remove(redBase.towers, i)
+        end
+    end
+    
     for i, barracks in ipairs(redBase.barracks) do
         local shouldSpawn, unitType, cost = barracks:update(dt, redBase.resources)
-        if shouldSpawn and unitType and redAlive < redBase.maxUnits then
-            redBase.resources = redBase.resources - cost
+        if shouldSpawn and unitType and redAlive < redBase.maxUnits and redBase.resources >= cost then
+            redBase.resources = math.max(0, redBase.resources - cost)
+            battleStats.red.goldSpent = battleStats.red.goldSpent + cost
             local x, y = barracks:getSpawnPosition()
             local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitType)
             agent.angle = 0
             agent.enemies = blueTeam
             agent.allies = redTeam
             agent.enemyBase = blueBase
+            agent.enemyTowers = blueBase.towers
             agent.myBase = redBase
             agent.resources = resources
             table.insert(redTeam, agent)
+            battleStats.red.unitsProduced = battleStats.red.unitsProduced + 1
             print(string.format("[Red Barracks %d] %s spawned! Total: %d", i, unitType, redAlive + 1))
         end
     end
@@ -183,9 +260,11 @@ function love.update(dt)
         agent.enemies = redTeam
         agent.allies = blueTeam
         agent.enemyBase = redBase
+        agent.enemyTowers = redBase.towers
         agent.myBase = blueBase
         agent.resources = resources
         table.insert(blueTeam, agent)
+        battleStats.blue.unitsProduced = battleStats.blue.unitsProduced + 1
         print(string.format("[Blue] %s spawned! Total: %d (Miners: %d)", unitClassBlue, blueAlive + 1, blueMiners))
     end
     
@@ -194,19 +273,36 @@ function love.update(dt)
         blueBase:tryAutoBuildBarracks(Barracks)
     end
     
+    -- 蓝方防御塔自动建造（每10秒尝试，错开时间）
+    if frameCount % 600 == 400 then
+        blueBase:tryAutoBuildTower(Tower)
+    end
+    
+    -- 更新蓝方防御塔
+    for i = #blueBase.towers, 1, -1 do
+        local tower = blueBase.towers[i]
+        tower:update(dt, redTeam)
+        if tower.isDead then
+            table.remove(blueBase.towers, i)
+        end
+    end
+    
     for i, barracks in ipairs(blueBase.barracks) do
         local shouldSpawn, unitType, cost = barracks:update(dt, blueBase.resources)
-        if shouldSpawn and unitType and blueAlive < blueBase.maxUnits then
-            blueBase.resources = blueBase.resources - cost
+        if shouldSpawn and unitType and blueAlive < blueBase.maxUnits and blueBase.resources >= cost then
+            blueBase.resources = math.max(0, blueBase.resources - cost)
+            battleStats.blue.goldSpent = battleStats.blue.goldSpent + cost
             local x, y = barracks:getSpawnPosition()
             local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, unitType)
             agent.angle = math.pi
             agent.enemies = redTeam
             agent.allies = blueTeam
             agent.enemyBase = redBase
+            agent.enemyTowers = redBase.towers
             agent.myBase = blueBase
             agent.resources = resources
             table.insert(blueTeam, agent)
+            battleStats.blue.unitsProduced = battleStats.blue.unitsProduced + 1
             print(string.format("[Blue Barracks %d] %s spawned! Total: %d", i, unitType, blueAlive + 1))
         end
     end
@@ -241,9 +337,16 @@ function love.draw()
     -- 背景
     love.graphics.setBackgroundColor(0.1, 0.1, 0.15)
     
+    -- 保存原始变换
+    love.graphics.push()
+    
+    -- 应用摄像机变换
+    love.graphics.translate(-camera.x, -camera.y)
+    love.graphics.scale(camera.scale, camera.scale)
+    
     -- 绘制分隔线（居中）
     love.graphics.setColor(0.3, 0.3, 0.3)
-    love.graphics.line(800, 0, 800, 900)
+    love.graphics.line(1200, 0, 1200, 1200)
     
     -- 绘制标题
     love.graphics.setColor(1, 1, 1)
@@ -262,32 +365,17 @@ function love.draw()
         barracks:draw()
     end
     
+    -- 绘制防御塔
+    for _, tower in ipairs(redBase.towers) do
+        tower:draw()
+    end
+    for _, tower in ipairs(blueBase.towers) do
+        tower:draw()
+    end
+    
     -- 绘制资源节点
     for _, resource in ipairs(resources) do
         resource:draw()
-    end
-    
-    -- 绘制队伍标签和统计
-    love.graphics.setColor(1, 0.2, 0.2)
-    love.graphics.print("Red Team", 50, 60, 0, 1.5, 1.5)
-    if debugInfo.redAlive then
-        love.graphics.print(string.format("Units: %d/%d", 
-            debugInfo.redAlive, redBase.maxUnits), 50, 85, 0, 1, 1)
-        love.graphics.print(string.format("Base: %.0f/%.0f", 
-            debugInfo.redBaseHP or 0, redBase.maxHealth), 50, 105, 0, 1, 1)
-        love.graphics.print(string.format("Barracks: %d/%d", 
-            #redBase.barracks, redBase.maxBarracks), 50, 125, 0, 1, 1)
-    end
-    
-    love.graphics.setColor(0.2, 0.2, 1)
-    love.graphics.print("Blue Team", 1400, 60, 0, 1.5, 1.5)
-    if debugInfo.blueAlive then
-        love.graphics.print(string.format("Units: %d/%d", 
-            debugInfo.blueAlive, blueBase.maxUnits), 1400, 85, 0, 1, 1)
-        love.graphics.print(string.format("Base: %.0f/%.0f", 
-            debugInfo.blueBaseHP or 0, blueBase.maxHealth), 1400, 105, 0, 1, 1)
-        love.graphics.print(string.format("Barracks: %d/%d", 
-            #blueBase.barracks, blueBase.maxBarracks), 1400, 125, 0, 1, 1)
     end
     
     -- 绘制所有单位
@@ -298,217 +386,400 @@ function love.draw()
         agent:draw()
     end
     
-    -- 绘制战斗时间
-    love.graphics.setColor(1, 1, 1, 0.8)
-    love.graphics.print(string.format("Frame: %d | Battle Time: %.1fs", 
-        frameCount, frameCount / 60), 450, 20, 0, 0.8, 0.8)
+    -- 恢复变换（UI在摄像机之外绘制）
+    love.graphics.pop()
+    
+    -- === UI层（不受摄像机影响）===
+    
+    -- 顶部深色半透明背景条
+    love.graphics.setColor(0, 0, 0, 0.7)
+    love.graphics.rectangle("fill", 0, 0, 1600, 50)
+    
+    -- 顶部标题和信息
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("GOAP STRATEGIC WARFARE", 20, 12, 0, 1.8, 1.8)
+    
+    -- 战斗时间
+    love.graphics.setColor(0.9, 0.9, 0.9)
+    love.graphics.print(string.format("Time: %.1fs", frameCount / 60), 650, 18, 0, 1.2, 1.2)
+    
+    -- 摄像机信息
+    love.graphics.setColor(0.6, 0.8, 1)
+    love.graphics.print(string.format("Zoom: %.2fx | Pos: (%.0f, %.0f)", 
+        camera.scale, camera.x, camera.y), 1200, 18, 0, 1, 1)
+    
+    -- 左侧红方信息面板
+    local leftPanelX = 10
+    local leftPanelY = 60
+    local panelWidth = 240
+    local panelHeight = 180
+    
+    -- 红方背景面板
+    love.graphics.setColor(0.2, 0, 0, 0.8)
+    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, panelHeight, 8, 8)
+    love.graphics.setColor(1, 0.2, 0.2, 0.9)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", leftPanelX, leftPanelY, panelWidth, panelHeight, 8, 8)
+    love.graphics.setLineWidth(1)
+    
+    -- 红方标题
+    love.graphics.setColor(1, 0.3, 0.3)
+    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 35, 8, 8)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("RED TEAM", leftPanelX + 60, leftPanelY + 8, 0, 1.5, 1.5)
+    
+    if debugInfo.redAlive then
+        local y = leftPanelY + 45
+        local lineH = 22
+        
+        -- 单位数
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Units:", leftPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.5, 1, 0.5)
+        love.graphics.print(string.format("%d/%d", debugInfo.redAlive, redBase.maxUnits), 
+            leftPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 基地血量
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Base HP:", leftPanelX + 15, y, 0, 1.1, 1.1)
+        local hpPercent = (debugInfo.redBaseHP or 0) / redBase.maxHealth
+        if hpPercent > 0.6 then
+            love.graphics.setColor(0.5, 1, 0.5)
+        elseif hpPercent > 0.3 then
+            love.graphics.setColor(1, 1, 0.5)
+        else
+            love.graphics.setColor(1, 0.5, 0.5)
+        end
+        love.graphics.print(string.format("%.0f%%", hpPercent * 100), 
+            leftPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 兵营
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Barracks:", leftPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.8, 0.8, 1)
+        love.graphics.print(string.format("%d/%d", #redBase.barracks, redBase.maxBarracks), 
+            leftPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 防御塔
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Towers:", leftPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(1, 0.8, 0.5)
+        love.graphics.print(string.format("%d/%d", #redBase.towers, redBase.maxTowers), 
+            leftPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 资源
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Gold:", leftPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(1, 0.84, 0)
+        love.graphics.print(string.format("$%d", math.floor(math.max(0, redBase.resources))), 
+            leftPanelX + 150, y, 0, 1.1, 1.1)
+    end
+    
+    -- 右侧蓝方信息面板
+    local rightPanelX = 1600 - panelWidth - 10
+    local rightPanelY = 60
+    
+    -- 蓝方背景面板
+    love.graphics.setColor(0, 0, 0.2, 0.8)
+    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, panelHeight, 8, 8)
+    love.graphics.setColor(0.2, 0.2, 1, 0.9)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", rightPanelX, rightPanelY, panelWidth, panelHeight, 8, 8)
+    love.graphics.setLineWidth(1)
+    
+    -- 蓝方标题
+    love.graphics.setColor(0.3, 0.3, 1)
+    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 35, 8, 8)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("BLUE TEAM", rightPanelX + 55, rightPanelY + 8, 0, 1.5, 1.5)
+    
+    if debugInfo.blueAlive then
+        local y = rightPanelY + 45
+        local lineH = 22
+        
+        -- 单位数
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Units:", rightPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.5, 1, 0.5)
+        love.graphics.print(string.format("%d/%d", debugInfo.blueAlive, blueBase.maxUnits), 
+            rightPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 基地血量
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Base HP:", rightPanelX + 15, y, 0, 1.1, 1.1)
+        local hpPercent = (debugInfo.blueBaseHP or 0) / blueBase.maxHealth
+        if hpPercent > 0.6 then
+            love.graphics.setColor(0.5, 1, 0.5)
+        elseif hpPercent > 0.3 then
+            love.graphics.setColor(1, 1, 0.5)
+        else
+            love.graphics.setColor(1, 0.5, 0.5)
+        end
+        love.graphics.print(string.format("%.0f%%", hpPercent * 100), 
+            rightPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 兵营
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Barracks:", rightPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.8, 0.8, 1)
+        love.graphics.print(string.format("%d/%d", #blueBase.barracks, blueBase.maxBarracks), 
+            rightPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 防御塔
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Towers:", rightPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(1, 0.8, 0.5)
+        love.graphics.print(string.format("%d/%d", #blueBase.towers, blueBase.maxTowers), 
+            rightPanelX + 150, y, 0, 1.1, 1.1)
+        
+        y = y + lineH
+        -- 资源
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Gold:", rightPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(1, 0.84, 0)
+        love.graphics.print(string.format("$%d", math.floor(math.max(0, blueBase.resources))), 
+            rightPanelX + 150, y, 0, 1.1, 1.1)
+    end
+    
+    -- 底部信息栏
+    local bottomBarY = 850
+    love.graphics.setColor(0, 0, 0, 0.8)
+    love.graphics.rectangle("fill", 0, bottomBarY, 1600, 50)
+    
+    -- 单位图例
+    love.graphics.setColor(0.8, 0.8, 0.8)
+    love.graphics.print("Units:", 20, bottomBarY + 5, 0, 0.9, 0.9)
+    love.graphics.setColor(0.9, 0.9, 0.9)
+    love.graphics.print("M=Miner  SC=Scout  S=Sniper  G=Gunner  +=Healer  D=Demo  R=Ranger  T=Tank", 
+        20, bottomBarY + 22, 0, 0.85, 0.85)
+    
+    -- 控制说明
+    love.graphics.setColor(0.8, 0.8, 0.8)
+    love.graphics.print("Controls:", 900, bottomBarY + 5, 0, 0.9, 0.9)
+    love.graphics.setColor(0.9, 0.9, 0.9)
+    love.graphics.print("R-Click+Drag=Move | Wheel=Zoom | L-Click=Select | R=Restart", 
+        900, bottomBarY + 22, 0, 0.85, 0.85)
     
     -- 如果游戏结束，显示胜利者
     if gameOver then
-        love.graphics.setColor(0, 0, 0, 0.8)
-        love.graphics.rectangle("fill", 250, 250, 700, 300)
+        love.graphics.setColor(0, 0, 0, 0.85)
+        love.graphics.rectangle("fill", 300, 200, 1000, 500)
         
         -- 边框
-        love.graphics.setColor(1, 1, 1, 0.5)
-        love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", 250, 250, 700, 300)
+        love.graphics.setColor(1, 1, 1, 0.6)
+        love.graphics.setLineWidth(4)
+        love.graphics.rectangle("line", 300, 200, 1000, 500, 10, 10)
         love.graphics.setLineWidth(1)
         
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("GAME OVER", 430, 280, 0, 3, 3)
+        love.graphics.print("GAME OVER", 640, 220, 0, 2.5, 2.5)
         
         -- 胜利者颜色
         if winner == "Red Team" then
             love.graphics.setColor(1, 0.3, 0.3)
+            love.graphics.print("RED TEAM WINS!", 600, 270, 0, 2.2, 2.2)
         else
             love.graphics.setColor(0.3, 0.3, 1)
+            love.graphics.print("BLUE TEAM WINS!", 590, 270, 0, 2.2, 2.2)
         end
-        love.graphics.print(winner .. " Wins!", 420, 360, 0, 2.5, 2.5)
         
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print(string.format("Battle Duration: %.1f seconds", frameCount / 60), 390, 430, 0, 1.2, 1.2)
-        love.graphics.print("Press R to Start New Battle", 410, 480, 0, 1.3, 1.3)
+        love.graphics.print(string.format("Battle Duration: %.1f seconds", frameCount / 60), 620, 320, 0, 1.2, 1.2)
+        
+        -- 战斗统计对比
+        local statY = 360
+        local lineH = 22
+        
+        love.graphics.setColor(1, 1, 0.5)
+        love.graphics.print("=== BATTLE STATISTICS ===", 590, statY, 0, 1.3, 1.3)
+        
+        statY = statY + lineH + 15
+        love.graphics.setColor(0.8, 0.8, 0.8)
+        love.graphics.print("Metric", 340, statY, 0, 1, 1)
+        love.graphics.setColor(1, 0.3, 0.3)
+        love.graphics.print("RED", 650, statY, 0, 1, 1)
+        love.graphics.setColor(0.3, 0.3, 1)
+        love.graphics.print("BLUE", 950, statY, 0, 1, 1)
+        
+        statY = statY + lineH
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Units Produced:", 340, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.5, 0.5)
+        love.graphics.print(tostring(battleStats.red.unitsProduced), 650, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(0.5, 0.5, 1)
+        love.graphics.print(tostring(battleStats.blue.unitsProduced), 950, statY, 0, 0.9, 0.9)
+        
+        statY = statY + lineH
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Enemy Kills:", 340, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.5, 0.5)
+        love.graphics.print(tostring(battleStats.red.kills), 650, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(0.5, 0.5, 1)
+        love.graphics.print(tostring(battleStats.blue.kills), 950, statY, 0, 0.9, 0.9)
+        
+        statY = statY + lineH
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Tower Kills:", 340, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.5, 0.5)
+        love.graphics.print(tostring(battleStats.red.towerKills), 650, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(0.5, 0.5, 1)
+        love.graphics.print(tostring(battleStats.blue.towerKills), 950, statY, 0, 0.9, 0.9)
+        
+        statY = statY + lineH
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Gold Spent:", 340, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.5, 0.5)
+        love.graphics.print(string.format("$%d", math.floor(battleStats.red.goldSpent)), 650, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(0.5, 0.5, 1)
+        love.graphics.print(string.format("$%d", math.floor(battleStats.blue.goldSpent)), 950, statY, 0, 0.9, 0.9)
+        
+        statY = statY + lineH
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Buildings Built:", 340, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.5, 0.5)
+        love.graphics.print(tostring(battleStats.red.buildingsBuilt), 650, statY, 0, 0.9, 0.9)
+        love.graphics.setColor(0.5, 0.5, 1)
+        love.graphics.print(tostring(battleStats.blue.buildingsBuilt), 950, statY, 0, 0.9, 0.9)
+        
+        love.graphics.setColor(0.9, 0.9, 0.9)
+        love.graphics.print("Press R to Start New Battle", 565, 650, 0, 1.2, 1.2)
     end
     
-    -- 绘制说明和图例
-    love.graphics.setColor(0.7, 0.7, 0.7)
-    love.graphics.print("Goal: Destroy enemy base | Bases produce units every 8s (max 10)", 20, 750, 0, 0.8, 0.8)
-    love.graphics.print("Classes: Soldier(balanced) | S=Sniper(high dmg) | G=Gunner(fast fire) | T=Tank(armored)", 20, 770, 0, 0.8, 0.8)
-    
-    -- 绘制选中角色的详细信息
+    -- 绘制选中角色的详细信息（简化版）
     if selectedAgent and not selectedAgent.isDead and selectedAgent.health > 0 then
-        local infoX = 300
-        local infoY = 150
-        local infoWidth = 600
-        local infoHeight = 450
+        local infoX = 280
+        local infoY = 250
+        local infoWidth = 420
+        local infoHeight = 300
         
         -- 半透明背景
-        love.graphics.setColor(0, 0, 0, 0.85)
-        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight)
+        love.graphics.setColor(0, 0, 0, 0.9)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 10, 10)
         
         -- 边框
-        love.graphics.setColor(selectedAgent.color[1], selectedAgent.color[2], selectedAgent.color[3], 0.8)
+        love.graphics.setColor(selectedAgent.color[1], selectedAgent.color[2], selectedAgent.color[3], 0.9)
         love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight)
+        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 10, 10)
         love.graphics.setLineWidth(1)
         
         -- 标题
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("=== AGENT INFO ===", infoX + 200, infoY + 15, 0, 1.5, 1.5)
+        love.graphics.print("=== UNIT INFO ===", infoX + 140, infoY + 15, 0, 1.5, 1.5)
         
         -- 基本信息
-        local y = infoY + 55
-        local lineHeight = 25
+        local y = infoY + 50
+        local lineHeight = 22
         
         love.graphics.setColor(selectedAgent.color)
-        love.graphics.print(string.format("Team: %s", selectedAgent.team:upper()), infoX + 30, y, 0, 1.2, 1.2)
-        
-        y = y + lineHeight
-        -- 兵种信息
-        local classColor = {1, 1, 0.5}
-        if selectedAgent.unitClass == "Sniper" then
-            classColor = {1, 0.5, 1}
-        elseif selectedAgent.unitClass == "Gunner" then
-            classColor = {1, 0.7, 0.3}
-        elseif selectedAgent.unitClass == "Tank" then
-            classColor = {0.5, 1, 0.5}
-        end
-        love.graphics.setColor(classColor)
-        love.graphics.print(string.format("Class: %s", selectedAgent.unitClass), infoX + 30, y, 0, 1.2, 1.2)
-        
-        y = y + lineHeight
-        love.graphics.setColor(0.9, 0.9, 0.9)
-        love.graphics.print(string.format("Position: (%.0f, %.0f)", selectedAgent.x, selectedAgent.y), infoX + 30, y)
+        love.graphics.print(string.format("%s Team - %s", selectedAgent.team:upper(), selectedAgent.unitClass), 
+            infoX + 25, y, 0, 1.3, 1.3)
         
         y = y + lineHeight + 10
+        -- 健康值
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Combat Stats ---", infoX + 30, y, 0, 1.1, 1.1)
-        
-        y = y + lineHeight + 5
-        love.graphics.setColor(0.3, 1, 0.3)
-        love.graphics.print(string.format("Health: %.0f / %.0f (%.0f%%)", 
-            selectedAgent.health, selectedAgent.maxHealth, 
-            (selectedAgent.health / selectedAgent.maxHealth) * 100), infoX + 30, y)
+        love.graphics.print("Health:", infoX + 25, y, 0, 1.1, 1.1)
+        local hpPercent = selectedAgent.health / selectedAgent.maxHealth
+        if hpPercent > 0.6 then
+            love.graphics.setColor(0.3, 1, 0.3)
+        elseif hpPercent > 0.3 then
+            love.graphics.setColor(1, 1, 0.3)
+        else
+            love.graphics.setColor(1, 0.3, 0.3)
+        end
+        love.graphics.print(string.format("%.0f / %.0f (%.0f%%)", 
+            selectedAgent.health, selectedAgent.maxHealth, hpPercent * 100), 
+            infoX + 150, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
+        -- 攻击力
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Attack:", infoX + 25, y, 0, 1.1, 1.1)
         love.graphics.setColor(1, 0.5, 0.3)
         local displayDamage = selectedAgent.baseDamage or selectedAgent.attackDamage
-        love.graphics.print(string.format("Attack Damage: %.1f", displayDamage), infoX + 30, y)
-        if selectedAgent.isBerserk then
-            love.graphics.setColor(1, 0.3, 0)
-            love.graphics.print(string.format(" (BERSERK: x%.1f = %.1f)", 
-                selectedAgent.berserkPower or 1.5, selectedAgent.attackDamage), infoX + 230, y)
-        elseif selectedAgent.moraleRatio and selectedAgent.moraleRatio < 1.0 then
-            love.graphics.setColor(1, 1, 0.3)
-            love.graphics.print(string.format(" (Morale: x%.2f = %.1f)", 
-                1.0 + (selectedAgent.moraleRatio - 1.0) * 0.3, selectedAgent.attackDamage), infoX + 230, y)
-        end
+        love.graphics.print(string.format("%.1f dmg", displayDamage), infoX + 150, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
+        -- 攻击范围
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Range:", infoX + 25, y, 0, 1.1, 1.1)
         love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("Attack Range: %.0f", selectedAgent.attackRange), infoX + 30, y)
+        love.graphics.print(string.format("%.0f", selectedAgent.attackRange), infoX + 150, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
+        -- 移动速度
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Speed:", infoX + 25, y, 0, 1.1, 1.1)
         love.graphics.setColor(0.5, 1, 1)
-        love.graphics.print(string.format("Move Speed: %.0f", selectedAgent.moveSpeed), infoX + 30, y)
+        love.graphics.print(string.format("%.0f", selectedAgent.moveSpeed), infoX + 150, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
-        love.graphics.setColor(1, 1, 0.5)
-        love.graphics.print(string.format("Critical Chance: %.0f%%", selectedAgent.critChance * 100), infoX + 30, y)
-        
-        y = y + lineHeight
-        love.graphics.setColor(0.5, 1, 0.5)
-        love.graphics.print(string.format("Dodge Chance: %.0f%%", selectedAgent.dodgeChance * 100), infoX + 30, y)
-        
-        y = y + lineHeight
+        -- 护甲
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("Armor:", infoX + 25, y, 0, 1.1, 1.1)
         love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("Armor: %.0f%% damage reduction", selectedAgent.armor * 100), infoX + 30, y)
+        love.graphics.print(string.format("%.0f%% reduction", selectedAgent.armor * 100), infoX + 150, y, 0, 1.1, 1.1)
         
         y = y + lineHeight + 10
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Special Abilities ---", infoX + 30, y, 0, 1.1, 1.1)
-        
-        y = y + lineHeight + 5
-        love.graphics.setColor(0.3, 1, 0.3)
-        if selectedAgent.hasRegen then
-            love.graphics.print("[Heart] Regeneration: +1 HP/sec", infoX + 30, y)
-        else
-            love.graphics.setColor(0.5, 0.5, 0.5)
-            love.graphics.print("No Regeneration", infoX + 30, y)
-        end
+        -- 特殊能力
+        love.graphics.setColor(1, 1, 0.5)
+        love.graphics.print("-- Special Abilities --", infoX + 25, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
-        love.graphics.setColor(1, 0.5, 0.3)
+        if selectedAgent.hasRegen then
+            love.graphics.setColor(0.3, 1, 0.3)
+            love.graphics.print("[Regen] +1 HP/sec", infoX + 25, y, 0, 1, 1)
+        end
         if selectedAgent.hasBerserk then
+            y = y + (selectedAgent.hasRegen and lineHeight or 0)
             if selectedAgent.isBerserk then
-                love.graphics.print(string.format("[Fire] BERSERK ACTIVE! (%.1fx damage)", 
-                    selectedAgent.berserkPower or 1.5), infoX + 30, y)
+                love.graphics.setColor(1, 0.3, 0)
+                love.graphics.print(string.format("[BERSERK] %.1fx damage!", selectedAgent.berserkPower or 1.5), 
+                    infoX + 25, y, 0, 1, 1)
             else
-                love.graphics.print(string.format("[Fire] Berserk Available (triggers at %.0f%% HP)", 
-                    selectedAgent.berserkThreshold * 100), infoX + 30, y)
+                love.graphics.setColor(1, 0.7, 0.3)
+                love.graphics.print(string.format("[Berserk] Ready (< %.0f%% HP)", 
+                    selectedAgent.berserkThreshold * 100), infoX + 25, y, 0, 1, 1)
             end
-        else
-            love.graphics.setColor(0.5, 0.5, 0.5)
-            love.graphics.print("No Berserk Ability", infoX + 30, y)
         end
         
         y = y + lineHeight + 10
+        -- 当前状态
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Morale System ---", infoX + 30, y, 0, 1.1, 1.1)
+        love.graphics.print("-- Status --", infoX + 25, y, 0, 1.1, 1.1)
         
-        y = y + lineHeight + 5
-        local aliveAllies = 0
-        local totalAllies = 0
-        for _, ally in ipairs(selectedAgent.allies) do
-            totalAllies = totalAllies + 1
-            if ally ~= selectedAgent and ally.health > 0 and not ally.isDead then
-                aliveAllies = aliveAllies + 1
-            end
-        end
-        local moralePercent = (selectedAgent.moraleRatio or 1.0) * 100
-        local moraleColor
-        if moralePercent > 70 then
-            moraleColor = {0.3, 1, 0.3}
-        elseif moralePercent > 40 then
-            moraleColor = {1, 1, 0.3}
-        else
-            moraleColor = {1, 0.5, 0.3}
-        end
-        love.graphics.setColor(moraleColor)
-        love.graphics.print(string.format("Morale: %.0f%% (Allies: %d/%d alive)", 
-            moralePercent, aliveAllies, totalAllies - 1), infoX + 30, y)
-        
-        y = y + lineHeight + 10
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Current Status ---", infoX + 30, y, 0, 1.1, 1.1)
-        
-        y = y + lineHeight + 5
+        y = y + lineHeight
         love.graphics.setColor(0.8, 0.8, 1)
         if selectedAgent.currentAction then
-            love.graphics.print("Action: " .. selectedAgent.currentAction.name, infoX + 30, y)
+            love.graphics.print("Action: " .. selectedAgent.currentAction.name, infoX + 25, y, 0, 1, 1)
         else
-            love.graphics.print("Action: Planning...", infoX + 30, y)
+            love.graphics.print("Action: Planning...", infoX + 25, y, 0, 1, 1)
         end
         
         y = y + lineHeight
         if selectedAgent.target then
             love.graphics.setColor(1, 0.5, 0.5)
-            love.graphics.print(string.format("Target: Enemy at (%.0f, %.0f) HP=%.0f", 
-                selectedAgent.target.x, selectedAgent.target.y, selectedAgent.target.health), infoX + 30, y)
+            love.graphics.print(string.format("Target: HP %.0f", selectedAgent.target.health), infoX + 25, y, 0, 1, 1)
         else
             love.graphics.setColor(0.7, 0.7, 0.7)
-            love.graphics.print("Target: None", infoX + 30, y)
+            love.graphics.print("Target: None", infoX + 25, y, 0, 1, 1)
         end
         
         -- 关闭提示
         love.graphics.setColor(1, 1, 1, 0.7)
-        love.graphics.print("Click anywhere to close", infoX + 200, infoY + infoHeight - 30, 0, 1.1, 1.1)
+        love.graphics.print("Click to close", infoX + 160, infoY + infoHeight - 25, 0, 1, 1)
     end
     
     -- 绘制选中基地的详细信息
     if selectedBase and not selectedBase.isDead then
-        local infoX = 350
-        local infoY = 200
+        local infoX = 550
+        local infoY = 250
         local infoWidth = 500
         local infoHeight = 350
         
@@ -607,8 +878,8 @@ function love.draw()
     
     -- 绘制兵营信息面板
     if selectedBarracks and not selectedBarracks.isDead then
-        local infoX, infoY = 50, 150
-        local infoWidth, infoHeight = 500, 400
+        local infoX, infoY = 820, 250
+        local infoWidth, infoHeight = 480, 380
         
         -- 半透明背景
         love.graphics.setColor(0, 0, 0, 0.85)
@@ -734,20 +1005,59 @@ function love.keypressed(key)
 end
 
 function love.mousepressed(x, y, button)
+    if button == 2 then  -- 右键拖拽摄像机
+        camera.isDragging = true
+        camera.dragStartX = x
+        camera.dragStartY = y
+        camera.dragStartCamX = camera.x
+        camera.dragStartCamY = camera.y
+        return
+    end
+    
     if button == 1 then  -- 左键点击
+        -- 将屏幕坐标转换为世界坐标
+        local worldX = (x + camera.x) / camera.scale
+        local worldY = (y + camera.y) / camera.scale
+        
         -- 如果已经有选中的对象，点击任何地方都关闭信息面板
-        if selectedAgent or selectedBase or selectedBarracks then
+        if selectedAgent or selectedBase or selectedBarracks or selectedTower then
             selectedAgent = nil
             selectedBase = nil
             selectedBarracks = nil
+            selectedTower = nil
             return
+        end
+        
+        -- 检查是否点击了防御塔
+        for _, tower in ipairs(redBase.towers) do
+            if not tower.isDead then
+                local dx = worldX - tower.x
+                local dy = worldY - tower.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                if distance <= tower.size then
+                    selectedTower = tower
+                    return
+                end
+            end
+        end
+        
+        for _, tower in ipairs(blueBase.towers) do
+            if not tower.isDead then
+                local dx = worldX - tower.x
+                local dy = worldY - tower.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                if distance <= tower.size then
+                    selectedTower = tower
+                    return
+                end
+            end
         end
         
         -- 检查是否点击了兵营
         for _, barracks in ipairs(redBase.barracks) do
             if not barracks.isDead then
-                if x >= barracks.x - barracks.size/2 and x <= barracks.x + barracks.size/2 and
-                   y >= barracks.y - barracks.size/2 and y <= barracks.y + barracks.size/2 then
+                if worldX >= barracks.x - barracks.size/2 and worldX <= barracks.x + barracks.size/2 and
+                   worldY >= barracks.y - barracks.size/2 and worldY <= barracks.y + barracks.size/2 then
                     selectedBarracks = barracks
                     return
                 end
@@ -756,8 +1066,8 @@ function love.mousepressed(x, y, button)
         
         for _, barracks in ipairs(blueBase.barracks) do
             if not barracks.isDead then
-                if x >= barracks.x - barracks.size/2 and x <= barracks.x + barracks.size/2 and
-                   y >= barracks.y - barracks.size/2 and y <= barracks.y + barracks.size/2 then
+                if worldX >= barracks.x - barracks.size/2 and worldX <= barracks.x + barracks.size/2 and
+                   worldY >= barracks.y - barracks.size/2 and worldY <= barracks.y + barracks.size/2 then
                     selectedBarracks = barracks
                     return
                 end
@@ -766,16 +1076,16 @@ function love.mousepressed(x, y, button)
         
         -- 检查是否点击了基地
         if redBase and not redBase.isDead then
-            if x >= redBase.x - redBase.size/2 and x <= redBase.x + redBase.size/2 and
-               y >= redBase.y - redBase.size/2 and y <= redBase.y + redBase.size/2 then
+            if worldX >= redBase.x - redBase.size/2 and worldX <= redBase.x + redBase.size/2 and
+               worldY >= redBase.y - redBase.size/2 and worldY <= redBase.y + redBase.size/2 then
                 selectedBase = redBase
                 return
             end
         end
         
         if blueBase and not blueBase.isDead then
-            if x >= blueBase.x - blueBase.size/2 and x <= blueBase.x + blueBase.size/2 and
-               y >= blueBase.y - blueBase.size/2 and y <= blueBase.y + blueBase.size/2 then
+            if worldX >= blueBase.x - blueBase.size/2 and worldX <= blueBase.x + blueBase.size/2 and
+               worldY >= blueBase.y - blueBase.size/2 and worldY <= blueBase.y + blueBase.size/2 then
                 selectedBase = blueBase
                 return
             end
@@ -784,8 +1094,8 @@ function love.mousepressed(x, y, button)
         -- 检查是否点击了某个角色
         for _, agent in ipairs(redTeam) do
             if not agent.isDead and agent.health > 0 then
-                local dx = x - agent.x
-                local dy = y - agent.y
+                local dx = worldX - agent.x
+                local dy = worldY - agent.y
                 local distance = math.sqrt(dx * dx + dy * dy)
                 if distance <= agent.radius then
                     selectedAgent = agent
@@ -796,8 +1106,8 @@ function love.mousepressed(x, y, button)
         
         for _, agent in ipairs(blueTeam) do
             if not agent.isDead and agent.health > 0 then
-                local dx = x - agent.x
-                local dy = y - agent.y
+                local dx = worldX - agent.x
+                local dy = worldY - agent.y
                 local distance = math.sqrt(dx * dx + dy * dy)
                 if distance <= agent.radius then
                     selectedAgent = agent
@@ -806,4 +1116,40 @@ function love.mousepressed(x, y, button)
             end
         end
     end
+end
+
+-- 鼠标释放事件
+function love.mousereleased(x, y, button)
+    if button == 2 then
+        camera.isDragging = false
+    end
+end
+
+-- 鼠标移动事件（处理拖拽）
+function love.mousemoved(x, y, dx, dy)
+    if camera.isDragging then
+        camera.x = camera.dragStartCamX - (x - camera.dragStartX)
+        camera.y = camera.dragStartCamY - (y - camera.dragStartY)
+    end
+end
+
+-- 鼠标滚轮事件（处理缩放）
+function love.wheelmoved(x, y)
+    local mouseX, mouseY = love.mouse.getPosition()
+    
+    -- 计算缩放前的世界坐标
+    local worldX = (mouseX + camera.x) / camera.scale
+    local worldY = (mouseY + camera.y) / camera.scale
+    
+    -- 更新缩放
+    local oldScale = camera.scale
+    if y > 0 then
+        camera.scale = math.min(camera.maxScale, camera.scale * 1.1)
+    elseif y < 0 then
+        camera.scale = math.max(camera.minScale, camera.scale * 0.9)
+    end
+    
+    -- 调整摄像机位置以保持鼠标位置下的世界坐标不变
+    camera.x = worldX * camera.scale - mouseX
+    camera.y = worldY * camera.scale - mouseY
 end

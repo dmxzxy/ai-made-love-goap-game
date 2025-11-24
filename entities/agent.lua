@@ -46,7 +46,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.armor = 0
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 15
+        self.radius = 18  -- 标准大小
         self.isMiner = true
         self.miningRate = normalRandom(4, 6)  -- 每秒采集速度
         self.miningRange = 50  -- 采集范围（必须靠近资源）
@@ -68,7 +68,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.armor = math.random() * 0.1
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 18  -- 稍小
+        self.radius = 19  -- 稍小但可见
         
     elseif unitClass == "Gunner" then
         -- 机枪手：高射速、中等伤害、中等血量、固定阵地
@@ -83,7 +83,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.armor = normalRandom(0.2, 0.35)  -- 高护甲
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 22  -- 稍大
+        self.radius = 22  -- 中等偏大
         
     elseif unitClass == "Tank" then
         -- 坦克兵：超高血量、高护甲、低伤害、慢速
@@ -99,7 +99,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.hasRegen = math.random() < 0.5  -- 50%概率再生
         self.regenRate = normalRandom(3, 6)
         self.hasBerserk = false
-        self.radius = 25  -- 大体型
+        self.radius = 28  -- 大体型，更易识别
         
     elseif unitClass == "Scout" then
         -- 侦察兵：超高速度、低血量、中等伤害、高闪避
@@ -114,7 +114,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.armor = 0
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 14  -- 小体型
+        self.radius = 16  -- 小巧快速
         
     elseif unitClass == "Healer" then
         -- 医疗兵：治疗友军、低战斗力
@@ -245,6 +245,17 @@ function Agent.new(x, y, team, color, unitClass)
     self.enemies = {}
     self.allies = {}
     self.enemyBase = nil  -- 敌方基地引用
+    self.enemyTowers = {}  -- 敌方防御塔引用
+    
+    -- 战斗反应系统
+    self.lastAttacker = nil  -- 最后一个攻击我的敌人
+    self.lastAttackedTime = 0  -- 上次被攻击的时间
+    self.aggroRadius = 200  -- 仇恨范围
+    
+    -- 减速效果
+    self.slowedUntil = 0
+    self.originalSpeed = nil
+    self.isFrozen = false
     
     return self
 end
@@ -301,6 +312,40 @@ function Agent:update(dt)
         dmg.y = dmg.y - 30 * dt
         if dmg.time > 1.5 then
             table.remove(self.damageNumbers, i)
+        end
+    end
+    
+    -- 检查减速效果是否结束
+    if self.slowedUntil > 0 and love.timer.getTime() > self.slowedUntil then
+        if self.originalSpeed then
+            self.moveSpeed = self.originalSpeed
+            self.originalSpeed = nil
+        end
+        self.slowedUntil = 0
+        self.isFrozen = false
+    end
+    
+    -- 矿工特殊逻辑
+    if self.isMiner then
+        self:updateMinerBehavior(dt)
+        return  -- 矿工不使用GOAP系统
+    end
+    
+    -- 战斗反应：如果被攻击且没有目标，立即反击
+    if self.lastAttacker and (love.timer.getTime() - self.lastAttackedTime < 2) then
+        if not self.target or self.target.isDead or self.target.health <= 0 then
+            -- 检查攻击者是否还活着且在范围内
+            if not self.lastAttacker.isDead and self.lastAttacker.health > 0 then
+                local dx = self.lastAttacker.x - self.x
+                local dy = self.lastAttacker.y - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                
+                if dist <= self.aggroRadius then
+                    self.target = self.lastAttacker
+                    self.currentPlan = nil  -- 重新规划
+                    print(string.format("[%s %s] Counter-attacking attacker!", self.team, self.unitClass))
+                end
+            end
         end
     end
     
@@ -396,8 +441,8 @@ function Agent:handleCollisions(dt)
     end
     
     -- 边界限制
-    self.x = math.max(self.radius, math.min(1200 - self.radius, self.x))
-    self.y = math.max(self.radius, math.min(800 - self.radius, self.y))
+    self.x = math.max(self.radius, math.min(2400 - self.radius, self.x))
+    self.y = math.max(self.radius, math.min(1200 - self.radius, self.y))
 end
 
 function Agent:updateWorldState()
@@ -506,8 +551,14 @@ function Agent:makePlan()
 end
 
 -- 受到伤害
-function Agent:takeDamage(damage, isCrit)
+function Agent:takeDamage(damage, isCrit, attacker)
     if self.isDead then return 0 end
+    
+    -- 记录攻击者（用于反击）
+    if attacker and not self.isMiner then
+        self.lastAttacker = attacker
+        self.lastAttackedTime = love.timer.getTime()
+    end
     
     -- 闪避判定
     if math.random() < self.dodgeChance then
@@ -629,15 +680,152 @@ function Agent:draw()
         love.graphics.circle("line", self.x, self.y, regenSize)
     end
     
-    -- 绘制身体（圆圈）
+    -- 绘制身体（根据兵种使用不同形状）
     love.graphics.setColor(bodyColor)
-    love.graphics.circle("fill", self.x, self.y, self.radius)
+    
+    if self.unitClass == "Tank" then
+        -- 坦克：方形
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.rectangle("fill", -self.radius, -self.radius, self.radius * 2, self.radius * 2)
+        love.graphics.pop()
+    elseif self.unitClass == "Sniper" or self.unitClass == "Ranger" then
+        -- 狙击手/游侠：细长菱形
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.polygon("fill",
+            self.radius * 1.3, 0,
+            0, -self.radius * 0.6,
+            -self.radius * 0.8, 0,
+            0, self.radius * 0.6)
+        love.graphics.pop()
+    elseif self.unitClass == "Scout" then
+        -- 侦察兵：三角形
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.polygon("fill",
+            self.radius * 1.2, 0,
+            -self.radius * 0.8, -self.radius,
+            -self.radius * 0.8, self.radius)
+        love.graphics.pop()
+    elseif self.unitClass == "Healer" then
+        -- 医疗兵：十字形（圆圈+十字）
+        love.graphics.circle("fill", self.x, self.y, self.radius * 0.8)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.setLineWidth(4)
+        love.graphics.line(self.x - self.radius * 0.6, self.y, self.x + self.radius * 0.6, self.y)
+        love.graphics.line(self.x, self.y - self.radius * 0.6, self.x, self.y + self.radius * 0.6)
+        love.graphics.setLineWidth(1)
+        love.graphics.setColor(bodyColor)
+    elseif self.unitClass == "Demolisher" then
+        -- 爆破兵：六边形
+        local sides = 6
+        local vertices = {}
+        for i = 0, sides - 1 do
+            local angle = (i / sides) * math.pi * 2
+            table.insert(vertices, self.x + math.cos(angle) * self.radius)
+            table.insert(vertices, self.y + math.sin(angle) * self.radius)
+        end
+        love.graphics.polygon("fill", vertices)
+    elseif self.unitClass == "Gunner" then
+        -- 机枪手：八边形
+        local sides = 8
+        local vertices = {}
+        for i = 0, sides - 1 do
+            local angle = (i / sides) * math.pi * 2
+            table.insert(vertices, self.x + math.cos(angle) * self.radius)
+            table.insert(vertices, self.y + math.sin(angle) * self.radius)
+        end
+        love.graphics.polygon("fill", vertices)
+    else
+        -- 士兵/矿工：标准圆形
+        love.graphics.circle("fill", self.x, self.y, self.radius)
+    end
     
     -- 绘制边框
     love.graphics.setColor(0, 0, 0)
-    love.graphics.circle("line", self.x, self.y, self.radius)
+    if self.unitClass == "Tank" then
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.rectangle("line", -self.radius, -self.radius, self.radius * 2, self.radius * 2)
+        love.graphics.pop()
+    elseif self.unitClass == "Sniper" or self.unitClass == "Ranger" then
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.polygon("line",
+            self.radius * 1.3, 0,
+            0, -self.radius * 0.6,
+            -self.radius * 0.8, 0,
+            0, self.radius * 0.6)
+        love.graphics.pop()
+    elseif self.unitClass == "Scout" then
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.polygon("line",
+            self.radius * 1.2, 0,
+            -self.radius * 0.8, -self.radius,
+            -self.radius * 0.8, self.radius)
+        love.graphics.pop()
+    elseif self.unitClass == "Healer" then
+        love.graphics.circle("line", self.x, self.y, self.radius * 0.8)
+    elseif self.unitClass == "Demolisher" then
+        local sides = 6
+        local vertices = {}
+        for i = 0, sides - 1 do
+            local angle = (i / sides) * math.pi * 2
+            table.insert(vertices, self.x + math.cos(angle) * self.radius)
+            table.insert(vertices, self.y + math.sin(angle) * self.radius)
+        end
+        love.graphics.polygon("line", vertices)
+    elseif self.unitClass == "Gunner" then
+        local sides = 8
+        local vertices = {}
+        for i = 0, sides - 1 do
+            local angle = (i / sides) * math.pi * 2
+            table.insert(vertices, self.x + math.cos(angle) * self.radius)
+            table.insert(vertices, self.y + math.sin(angle) * self.radius)
+        end
+        love.graphics.polygon("line", vertices)
+    else
+        love.graphics.circle("line", self.x, self.y, self.radius)
+    end
     
-    -- 绘制兵种标识
+    -- 绘制方向指示器（武器/炮管）
+    if not self.isMiner then
+        love.graphics.push()
+        love.graphics.translate(self.x, self.y)
+        love.graphics.rotate(self.angle)
+        
+        if self.unitClass == "Tank" then
+            -- 坦克炮管
+            love.graphics.setColor(0.3, 0.3, 0.3)
+            love.graphics.rectangle("fill", 0, -4, self.radius + 8, 8)
+        elseif self.unitClass == "Sniper" or self.unitClass == "Ranger" then
+            -- 狙击枪
+            love.graphics.setColor(0.4, 0.4, 0.4)
+            love.graphics.setLineWidth(2)
+            love.graphics.line(0, 0, self.radius + 10, 0)
+            love.graphics.setLineWidth(1)
+        elseif self.unitClass == "Gunner" then
+            -- 机枪
+            love.graphics.setColor(0.5, 0.5, 0.5)
+            love.graphics.rectangle("fill", 0, -3, self.radius + 5, 6)
+        else
+            -- 标准武器
+            love.graphics.setColor(0.6, 0.6, 0.6)
+            love.graphics.rectangle("fill", 0, -2, self.radius + 3, 4)
+        end
+        
+        love.graphics.pop()
+    end
+    
+    -- 绘制兵种文字标识
     love.graphics.setColor(1, 1, 1)
     local classSymbol = ""
     if self.unitClass == "Sniper" then
@@ -646,6 +834,16 @@ function Agent:draw()
         classSymbol = "G"
     elseif self.unitClass == "Tank" then
         classSymbol = "T"
+    elseif self.unitClass == "Scout" then
+        classSymbol = "SC"
+    elseif self.unitClass == "Healer" then
+        classSymbol = "+"
+    elseif self.unitClass == "Demolisher" then
+        classSymbol = "D"
+    elseif self.unitClass == "Ranger" then
+        classSymbol = "R"
+    elseif self.unitClass == "Miner" then
+        classSymbol = "M"
     end
     if classSymbol ~= "" then
         love.graphics.print(classSymbol, self.x - 5, self.y - 7, 0, 1, 1)

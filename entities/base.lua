@@ -51,6 +51,16 @@ function Base.new(x, y, team, color)
     self.isConstructing = false
     self.constructionProgress = 0
     
+    -- 防御塔系统
+    self.towers = {}  -- 建造的防御塔列表
+    self.maxTowers = 4  -- 最大防御塔数量
+    self.towerCosts = {
+        Arrow = 150,
+        Cannon = 250,
+        Laser = 300,
+        Frost = 200
+    }
+    
     -- 视觉效果
     self.flashTime = 0
     self.isDead = false
@@ -121,7 +131,7 @@ function Base:update(dt, currentUnitCount, resources, minerCount)
                 
                 if self.productionCooldown >= self.productionTime then
                     -- 消耗资源，生产单位
-                    self.resources = self.resources - cost
+                    self.resources = math.max(0, self.resources - cost)
                     self.productionCooldown = 0
                     self.productionProgress = 0
                     self.unitsProduced = self.unitsProduced + 1
@@ -189,7 +199,7 @@ function Base:chooseUnitToProduce(minerCount)
     end
 end
 
-function Base:takeDamage(damage, isCrit)
+function Base:takeDamage(damage, isCrit, attacker)
     if self.isDead then return 0 end
     
     local actualDamage = damage
@@ -359,7 +369,7 @@ function Base:buildBarracks(barracksType, Barracks)
     table.insert(self.barracks, barracks)
     
     -- 扣除资源
-    self.resources = self.resources - barracksData.cost
+    self.resources = math.max(0, self.resources - barracksData.cost)
     
     print(string.format("[%s] Building %s at position %d (Cost: $%d, Remaining: $%d)", 
         self.team:upper(), barracksData.name, #self.barracks, 
@@ -414,6 +424,115 @@ function Base:tryAutoBuildBarracks(Barracks)
         if self.resources >= barracksData.cost then
             return self:buildBarracks(barrackType, Barracks)
         end
+    end
+    
+    return false
+end
+
+-- 建造防御塔
+function Base:buildTower(towerType, Tower)
+    if #self.towers >= self.maxTowers then
+        print(string.format("[%s] Max towers reached (%d/%d)", self.team, #self.towers, self.maxTowers))
+        return false
+    end
+    
+    local cost = self.towerCosts[towerType]
+    if not cost then
+        print("Unknown tower type: " .. towerType)
+        return false
+    end
+    
+    if self.resources < cost then
+        return false
+    end
+    
+    -- 扣除资源
+    self.resources = math.max(0, self.resources - cost)
+    
+    -- 智能防御塔布局：只在敌人方向建塔
+    local towerCount = #self.towers
+    local angle, distance
+    
+    if self.team == "red" then
+        -- 红方基地在左侧(x=150)，敌人在右侧
+        -- 只在右侧和两侧前方建塔（0度到180度范围，避开后方）
+        -- 第一层：正前方防御（0度方向）
+        -- 第二层：右上和右下（45度和-45度）
+        -- 第三层：上方和下方（90度和-90度）
+        local angleOptions = {
+            0,           -- 正前方
+            math.pi / 6,   -- 右上30度
+            -math.pi / 6,  -- 右下30度
+            math.pi / 4,   -- 右上45度
+            -math.pi / 4,  -- 右下45度
+            math.pi / 3,   -- 右上60度
+            -math.pi / 3,  -- 右下60度
+            math.pi / 2,   -- 正上方
+            -math.pi / 2   -- 正下方
+        }
+        angle = angleOptions[(towerCount % #angleOptions) + 1]
+        distance = 120 + math.floor(towerCount / #angleOptions) * 40
+    else
+        -- 蓝方基地在右侧(x=2250)，敌人在左侧
+        -- 只在左侧和两侧前方建塔（180度方向为中心）
+        local angleOptions = {
+            math.pi,           -- 正前方（左）
+            math.pi + math.pi / 6,   -- 左上30度
+            math.pi - math.pi / 6,   -- 左下30度
+            math.pi + math.pi / 4,   -- 左上45度
+            math.pi - math.pi / 4,   -- 左下45度
+            math.pi + math.pi / 3,   -- 左上60度
+            math.pi - math.pi / 3,   -- 左下60度
+            math.pi / 2,       -- 正上方
+            -math.pi / 2       -- 正下方
+        }
+        angle = angleOptions[(towerCount % #angleOptions) + 1]
+        distance = 120 + math.floor(towerCount / #angleOptions) * 40
+    end
+    
+    local towerX = self.x + math.cos(angle) * distance
+    local towerY = self.y + math.sin(angle) * distance
+    
+    local tower = Tower.new(towerX, towerY, self.team, towerType)
+    table.insert(self.towers, tower)
+    
+    print(string.format("[%s] Building %s tower at (%.0f, %.0f) [angle: %.0f deg], cost: %d, remaining: %.0f", 
+        self.team, towerType, towerX, towerY, math.deg(angle), cost, self.resources))
+    
+    return true
+end
+
+-- 尝试自动建造防御塔
+function Base:tryAutoBuildTower(Tower)
+    if #self.towers >= self.maxTowers then
+        return false
+    end
+    
+    -- 优先建造箭塔（便宜且实用）
+    if #self.towers == 0 and self.resources >= 150 then
+        return self:buildTower("Arrow", Tower)
+    end
+    
+    -- 根据资源和策略建造
+    if self.resources >= 300 then
+        -- 资源充足，建造高级塔
+        local rand = math.random()
+        if rand < 0.3 then
+            return self:buildTower("Laser", Tower)
+        elseif rand < 0.6 then
+            return self:buildTower("Cannon", Tower)
+        else
+            return self:buildTower("Frost", Tower)
+        end
+    elseif self.resources >= 200 then
+        -- 中等资源，冰冻塔或箭塔
+        if math.random() < 0.5 then
+            return self:buildTower("Frost", Tower)
+        else
+            return self:buildTower("Arrow", Tower)
+        end
+    elseif self.resources >= 150 then
+        return self:buildTower("Arrow", Tower)
     end
     
     return false

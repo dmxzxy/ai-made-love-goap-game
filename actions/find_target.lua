@@ -22,7 +22,33 @@ function FindTarget:perform(agent, dt)
     local bestTarget = nil
     local bestScore = -math.huge
     
-    -- 首先尝试找敌方单位
+    -- 首先检查是否有附近的防御塔（高威胁）
+    local nearbyTower = nil
+    local nearestTowerDist = 300  -- 防御塔威胁范围
+    
+    if agent.enemyTowers then
+        for _, tower in ipairs(agent.enemyTowers) do
+            if not tower.isDead and not tower.isBuilding then
+                local dx = tower.x - agent.x
+                local dy = tower.y - agent.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                
+                -- 如果在防御塔攻击范围内，优先攻击塔
+                if distance < tower.range + 50 and distance < nearestTowerDist then
+                    nearestTowerDist = distance
+                    nearbyTower = tower
+                end
+            end
+        end
+    end
+    
+    if nearbyTower then
+        agent.target = nearbyTower
+        print(string.format("[%s] Priority target: Enemy tower in range!", agent.team))
+        return true
+    end
+    
+    -- 尝试找敌方单位
     local hasLivingEnemies = false
     for _, enemy in ipairs(agent.enemies) do
         if enemy.health > 0 and not enemy.isDead then
