@@ -392,56 +392,107 @@ function love.draw()
     -- === UI层（不受摄像机影响）===
     
     -- 顶部深色半透明背景条
-    love.graphics.setColor(0, 0, 0, 0.7)
-    love.graphics.rectangle("fill", 0, 0, 1600, 50)
+    -- 顶部信息栏（现代渐变效果）
+    love.graphics.setColor(0.05, 0.05, 0.12, 0.95)
+    love.graphics.rectangle("fill", 0, 0, 1600, 55)
+    love.graphics.setColor(0.15, 0.15, 0.28, 0.5)
+    love.graphics.rectangle("fill", 0, 0, 1600, 25)
     
-    -- 顶部标题和信息
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.print("GOAP STRATEGIC WARFARE", 20, 12, 0, 1.8, 1.8)
-    
-    -- 战斗时间
-    love.graphics.setColor(0.9, 0.9, 0.9)
-    love.graphics.print(string.format("Time: %.1fs", frameCount / 60), 650, 18, 0, 1.2, 1.2)
-    
-    -- 摄像机信息
-    love.graphics.setColor(0.6, 0.8, 1)
-    love.graphics.print(string.format("Zoom: %.2fx | Pos: (%.0f, %.0f)", 
-        camera.scale, camera.x, camera.y), 1200, 18, 0, 1, 1)
-    
-    -- 左侧红方信息面板
-    local leftPanelX = 10
-    local leftPanelY = 60
-    local panelWidth = 240
-    local panelHeight = 180
-    
-    -- 红方背景面板
-    love.graphics.setColor(0.2, 0, 0, 0.8)
-    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, panelHeight, 8, 8)
-    love.graphics.setColor(1, 0.2, 0.2, 0.9)
+    -- 顶部装饰线
+    love.graphics.setColor(0.3, 0.6, 1, 0.6)
     love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", leftPanelX, leftPanelY, panelWidth, panelHeight, 8, 8)
+    love.graphics.line(0, 55, 1600, 55)
     love.graphics.setLineWidth(1)
     
-    -- 红方标题
-    love.graphics.setColor(1, 0.3, 0.3)
-    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 35, 8, 8)
+    -- 游戏标题（带阴影+双色效果）
+    love.graphics.setColor(0, 0, 0, 0.5)
+    love.graphics.print("GOAP STRATEGIC WARFARE", 22, 14, 0, 1.9, 1.9)
+    love.graphics.setColor(1, 0.9, 0.3)
+    love.graphics.print("GOAP", 20, 12, 0, 1.9, 1.9)
+    love.graphics.setColor(0.8, 0.8, 0.95)
+    love.graphics.print(" STRATEGIC WARFARE", 100, 12, 0, 1.9, 1.9)
+    
+    -- 战斗时间（带背景圆圈）
+    love.graphics.setColor(0.3, 0.7, 0.3, 0.25)
+    love.graphics.circle("fill", 665, 28, 20)
+    love.graphics.setColor(0.7, 0.95, 0.7)
+    love.graphics.print(string.format("%.1fs", frameCount / 60), 690, 16, 0, 1.3, 1.3)
+    love.graphics.setColor(0.5, 0.9, 0.5, 0.8)
+    love.graphics.circle("line", 650, 28, 10)
+    love.graphics.circle("fill", 650, 28, 3)
+    
+    -- 摄像机信息（科技感面板）
+    love.graphics.setColor(0.15, 0.25, 0.4, 0.4)
+    love.graphics.rectangle("fill", 1185, 10, 405, 35, 5, 5)
+    love.graphics.setColor(0.3, 0.6, 0.9, 0.6)
+    love.graphics.setLineWidth(1.5)
+    love.graphics.rectangle("line", 1185, 10, 405, 35, 5, 5)
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(0.4, 0.75, 1)
+    love.graphics.print(string.format("Zoom: %.2fx | Pos: (%.0f, %.0f)", 
+        camera.scale, camera.x, camera.y), 1200, 18, 0, 1.05, 1.05)
+    
+    -- 左侧红方信息面板（升级设计）
+    local leftPanelX = 10
+    local leftPanelY = 65
+    local panelWidth = 260
+    local panelHeight = 200
+    
+    -- 红方背景面板（带渐变+光晕）
+    love.graphics.setColor(0.15, 0.02, 0.02, 0.92)
+    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, panelHeight, 10, 10)
+    love.graphics.setColor(0.3, 0.05, 0.05, 0.5)
+    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 45, 10, 10)
+    
+    -- 发光边框
+    love.graphics.setColor(1, 0.2, 0.2, 0.3)
+    love.graphics.setLineWidth(4)
+    love.graphics.rectangle("line", leftPanelX - 1, leftPanelY - 1, panelWidth + 2, panelHeight + 2, 10, 10)
+    love.graphics.setColor(1, 0.3, 0.3, 0.8)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", leftPanelX, leftPanelY, panelWidth, panelHeight, 10, 10)
+    love.graphics.setLineWidth(1)
+    
+    -- 红方标题栏（立体效果）
+    love.graphics.setColor(0.8, 0.15, 0.15)
+    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 42, 10, 10)
+    love.graphics.setColor(1, 0.2, 0.2, 0.4)
+    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 20, 10, 10)
+    
+    -- 标题文字
+    love.graphics.setColor(0, 0, 0, 0.4)
+    love.graphics.print("RED TEAM", leftPanelX + 72, leftPanelY + 11, 0, 1.6, 1.6)
     love.graphics.setColor(1, 1, 1)
-    love.graphics.print("RED TEAM", leftPanelX + 60, leftPanelY + 8, 0, 1.5, 1.5)
+    love.graphics.print("RED TEAM", leftPanelX + 70, leftPanelY + 9, 0, 1.6, 1.6)
+    
+    -- 装饰三角形
+    love.graphics.setColor(1, 0.4, 0.4, 0.6)
+    love.graphics.polygon("fill", 
+        leftPanelX + 15, leftPanelY + 18,
+        leftPanelX + 25, leftPanelY + 13,
+        leftPanelX + 25, leftPanelY + 23)
     
     if debugInfo.redAlive then
-        local y = leftPanelY + 45
-        local lineH = 22
+        local y = leftPanelY + 52
+        local lineH = 26
         
+        -- 数据项（带图标和进度条）
         -- 单位数
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Units:", leftPanelX + 15, y, 0, 1.1, 1.1)
         love.graphics.setColor(0.5, 1, 0.5)
         love.graphics.print(string.format("%d/%d", debugInfo.redAlive, redBase.maxUnits), 
-            leftPanelX + 150, y, 0, 1.1, 1.1)
+            leftPanelX + 170, y, 0, 1.15, 1.15)
+        -- 进度条
+        local progress = debugInfo.redAlive / redBase.maxUnits
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
+        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
+        love.graphics.setColor(0.5, 1, 0.5, 0.8)
+        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, (panelWidth - 30) * progress, 4, 2, 2)
         
         y = y + lineH
         -- 基地血量
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Base HP:", leftPanelX + 15, y, 0, 1.1, 1.1)
         local hpPercent = (debugInfo.redBaseHP or 0) / redBase.maxHealth
         if hpPercent > 0.6 then
@@ -449,68 +500,111 @@ function love.draw()
         elseif hpPercent > 0.3 then
             love.graphics.setColor(1, 1, 0.5)
         else
-            love.graphics.setColor(1, 0.5, 0.5)
+            love.graphics.setColor(1, 0.4, 0.4)
         end
         love.graphics.print(string.format("%.0f%%", hpPercent * 100), 
-            leftPanelX + 150, y, 0, 1.1, 1.1)
+            leftPanelX + 170, y, 0, 1.15, 1.15)
+        -- 血条
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
+        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
+        if hpPercent > 0.6 then
+            love.graphics.setColor(0.3, 0.9, 0.3, 0.9)
+        elseif hpPercent > 0.3 then
+            love.graphics.setColor(1, 0.9, 0.3, 0.9)
+        else
+            love.graphics.setColor(1, 0.3, 0.3, 0.9)
+        end
+        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, (panelWidth - 30) * hpPercent, 4, 2, 2)
         
         y = y + lineH
         -- 兵营
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Barracks:", leftPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.8, 0.8, 1)
+        love.graphics.setColor(0.7, 0.7, 1)
         love.graphics.print(string.format("%d/%d", #redBase.barracks, redBase.maxBarracks), 
-            leftPanelX + 150, y, 0, 1.1, 1.1)
+            leftPanelX + 170, y, 0, 1.15, 1.15)
         
         y = y + lineH
         -- 防御塔
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Towers:", leftPanelX + 15, y, 0, 1.1, 1.1)
         love.graphics.setColor(1, 0.8, 0.5)
         love.graphics.print(string.format("%d/%d", #redBase.towers, redBase.maxTowers), 
-            leftPanelX + 150, y, 0, 1.1, 1.1)
+            leftPanelX + 170, y, 0, 1.15, 1.15)
         
         y = y + lineH
-        -- 资源
-        love.graphics.setColor(1, 1, 1)
+        -- 资源（带金币效果）
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Gold:", leftPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(1, 0.84, 0)
-        love.graphics.print(string.format("$%d", math.floor(math.max(0, redBase.resources))), 
-            leftPanelX + 150, y, 0, 1.1, 1.1)
+        love.graphics.setColor(1, 0.9, 0.1)
+        local goldAmount = math.floor(math.max(0, redBase.resources))
+        love.graphics.print(string.format("$%d", goldAmount), 
+            leftPanelX + 170, y, 0, 1.2, 1.2)
+        -- 金币闪烁效果
+        if goldAmount > 500 then
+            local pulse = math.sin(love.timer.getTime() * 3) * 0.3 + 0.7
+            love.graphics.setColor(1, 0.95, 0.3, pulse)
+            love.graphics.circle("fill", leftPanelX + 245, y + 8, 4)
+        end
     end
     
-    -- 右侧蓝方信息面板
+    -- 右侧蓝方信息面板（对称设计）
     local rightPanelX = 1600 - panelWidth - 10
-    local rightPanelY = 60
+    local rightPanelY = 65
     
     -- 蓝方背景面板
-    love.graphics.setColor(0, 0, 0.2, 0.8)
-    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, panelHeight, 8, 8)
-    love.graphics.setColor(0.2, 0.2, 1, 0.9)
+    love.graphics.setColor(0.02, 0.02, 0.15, 0.92)
+    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, panelHeight, 10, 10)
+    love.graphics.setColor(0.05, 0.05, 0.3, 0.5)
+    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 45, 10, 10)
+    
+    -- 发光边框
+    love.graphics.setColor(0.2, 0.2, 1, 0.3)
+    love.graphics.setLineWidth(4)
+    love.graphics.rectangle("line", rightPanelX - 1, rightPanelY - 1, panelWidth + 2, panelHeight + 2, 10, 10)
+    love.graphics.setColor(0.3, 0.3, 1, 0.8)
     love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", rightPanelX, rightPanelY, panelWidth, panelHeight, 8, 8)
+    love.graphics.rectangle("line", rightPanelX, rightPanelY, panelWidth, panelHeight, 10, 10)
     love.graphics.setLineWidth(1)
     
-    -- 蓝方标题
-    love.graphics.setColor(0.3, 0.3, 1)
-    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 35, 8, 8)
+    -- 蓝方标题栏
+    love.graphics.setColor(0.15, 0.15, 0.8)
+    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 42, 10, 10)
+    love.graphics.setColor(0.2, 0.2, 1, 0.4)
+    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 20, 10, 10)
+    
+    -- 标题文字
+    love.graphics.setColor(0, 0, 0, 0.4)
+    love.graphics.print("BLUE TEAM", rightPanelX + 67, rightPanelY + 11, 0, 1.6, 1.6)
     love.graphics.setColor(1, 1, 1)
-    love.graphics.print("BLUE TEAM", rightPanelX + 55, rightPanelY + 8, 0, 1.5, 1.5)
+    love.graphics.print("BLUE TEAM", rightPanelX + 65, rightPanelY + 9, 0, 1.6, 1.6)
+    
+    -- 装饰三角形
+    love.graphics.setColor(0.4, 0.4, 1, 0.6)
+    love.graphics.polygon("fill", 
+        rightPanelX + panelWidth - 15, rightPanelY + 18,
+        rightPanelX + panelWidth - 25, rightPanelY + 13,
+        rightPanelX + panelWidth - 25, rightPanelY + 23)
     
     if debugInfo.blueAlive then
-        local y = rightPanelY + 45
-        local lineH = 22
+        local y = rightPanelY + 52
+        local lineH = 26
         
         -- 单位数
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Units:", rightPanelX + 15, y, 0, 1.1, 1.1)
         love.graphics.setColor(0.5, 1, 0.5)
         love.graphics.print(string.format("%d/%d", debugInfo.blueAlive, blueBase.maxUnits), 
-            rightPanelX + 150, y, 0, 1.1, 1.1)
+            rightPanelX + 170, y, 0, 1.15, 1.15)
+        local progress = debugInfo.blueAlive / blueBase.maxUnits
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
+        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
+        love.graphics.setColor(0.5, 1, 0.5, 0.8)
+        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, (panelWidth - 30) * progress, 4, 2, 2)
         
         y = y + lineH
         -- 基地血量
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Base HP:", rightPanelX + 15, y, 0, 1.1, 1.1)
         local hpPercent = (debugInfo.blueBaseHP or 0) / blueBase.maxHealth
         if hpPercent > 0.6 then
@@ -518,470 +612,629 @@ function love.draw()
         elseif hpPercent > 0.3 then
             love.graphics.setColor(1, 1, 0.5)
         else
-            love.graphics.setColor(1, 0.5, 0.5)
+            love.graphics.setColor(1, 0.4, 0.4)
         end
         love.graphics.print(string.format("%.0f%%", hpPercent * 100), 
-            rightPanelX + 150, y, 0, 1.1, 1.1)
+            rightPanelX + 170, y, 0, 1.15, 1.15)
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
+        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
+        if hpPercent > 0.6 then
+            love.graphics.setColor(0.3, 0.9, 0.3, 0.9)
+        elseif hpPercent > 0.3 then
+            love.graphics.setColor(1, 0.9, 0.3, 0.9)
+        else
+            love.graphics.setColor(1, 0.3, 0.3, 0.9)
+        end
+        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, (panelWidth - 30) * hpPercent, 4, 2, 2)
         
         y = y + lineH
         -- 兵营
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Barracks:", rightPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.8, 0.8, 1)
+        love.graphics.setColor(0.7, 0.7, 1)
         love.graphics.print(string.format("%d/%d", #blueBase.barracks, blueBase.maxBarracks), 
-            rightPanelX + 150, y, 0, 1.1, 1.1)
+            rightPanelX + 170, y, 0, 1.15, 1.15)
         
         y = y + lineH
         -- 防御塔
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Towers:", rightPanelX + 15, y, 0, 1.1, 1.1)
         love.graphics.setColor(1, 0.8, 0.5)
         love.graphics.print(string.format("%d/%d", #blueBase.towers, blueBase.maxTowers), 
-            rightPanelX + 150, y, 0, 1.1, 1.1)
+            rightPanelX + 170, y, 0, 1.15, 1.15)
         
         y = y + lineH
         -- 资源
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print("Gold:", rightPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(1, 0.84, 0)
-        love.graphics.print(string.format("$%d", math.floor(math.max(0, blueBase.resources))), 
-            rightPanelX + 150, y, 0, 1.1, 1.1)
+        love.graphics.setColor(1, 0.9, 0.1)
+        local goldAmount = math.floor(math.max(0, blueBase.resources))
+        love.graphics.print(string.format("$%d", goldAmount), 
+            rightPanelX + 170, y, 0, 1.2, 1.2)
+        if goldAmount > 500 then
+            local pulse = math.sin(love.timer.getTime() * 3) * 0.3 + 0.7
+            love.graphics.setColor(1, 0.95, 0.3, pulse)
+            love.graphics.circle("fill", rightPanelX + 245, y + 8, 4)
+        end
     end
     
-    -- 底部信息栏
+    -- 底部信息栏（现代设计）
     local bottomBarY = 850
-    love.graphics.setColor(0, 0, 0, 0.8)
+    love.graphics.setColor(0.05, 0.05, 0.1, 0.93)
     love.graphics.rectangle("fill", 0, bottomBarY, 1600, 50)
     
-    -- 单位图例
-    love.graphics.setColor(0.8, 0.8, 0.8)
-    love.graphics.print("Units:", 20, bottomBarY + 5, 0, 0.9, 0.9)
-    love.graphics.setColor(0.9, 0.9, 0.9)
+    -- 顶部装饰线
+    love.graphics.setColor(0.3, 0.6, 1, 0.5)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(0, bottomBarY, 1600, bottomBarY)
+    love.graphics.setLineWidth(1)
+    
+    -- 左侧：单位图例（带背景框）
+    love.graphics.setColor(0.15, 0.2, 0.3, 0.5)
+    love.graphics.rectangle("fill", 10, bottomBarY + 5, 870, 40, 5, 5)
+    love.graphics.setColor(0.4, 0.6, 0.8, 0.4)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", 10, bottomBarY + 5, 870, 40, 5, 5)
+    
+    love.graphics.setColor(0.7, 0.9, 1)
+    love.graphics.print("UNITS:", 20, bottomBarY + 8, 0, 1, 1)
+    love.graphics.setColor(0.85, 0.95, 1)
     love.graphics.print("M=Miner  SC=Scout  S=Sniper  G=Gunner  +=Healer  D=Demo  R=Ranger  T=Tank", 
-        20, bottomBarY + 22, 0, 0.85, 0.85)
+        20, bottomBarY + 24, 0, 0.9, 0.9)
     
-    -- 控制说明
-    love.graphics.setColor(0.8, 0.8, 0.8)
-    love.graphics.print("Controls:", 900, bottomBarY + 5, 0, 0.9, 0.9)
-    love.graphics.setColor(0.9, 0.9, 0.9)
+    -- 右侧：控制说明（带背景框）
+    love.graphics.setColor(0.15, 0.25, 0.2, 0.5)
+    love.graphics.rectangle("fill", 890, bottomBarY + 5, 700, 40, 5, 5)
+    love.graphics.setColor(0.4, 0.8, 0.6, 0.4)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", 890, bottomBarY + 5, 700, 40, 5, 5)
+    
+    love.graphics.setColor(0.7, 1, 0.8)
+    love.graphics.print("CONTROLS:", 900, bottomBarY + 8, 0, 1, 1)
+    love.graphics.setColor(0.85, 1, 0.9)
     love.graphics.print("R-Click+Drag=Move | Wheel=Zoom | L-Click=Select | R=Restart", 
-        900, bottomBarY + 22, 0, 0.85, 0.85)
+        900, bottomBarY + 24, 0, 0.9, 0.9)
     
-    -- 如果游戏结束，显示胜利者
+    -- 如果游戏结束，显示胜利者（现代设计）
     if gameOver then
-        love.graphics.setColor(0, 0, 0, 0.85)
-        love.graphics.rectangle("fill", 300, 200, 1000, 500)
+        -- 暗化背景
+        love.graphics.setColor(0, 0, 0, 0.75)
+        love.graphics.rectangle("fill", 0, 0, 1600, 900)
         
-        -- 边框
-        love.graphics.setColor(1, 1, 1, 0.6)
-        love.graphics.setLineWidth(4)
-        love.graphics.rectangle("line", 300, 200, 1000, 500, 10, 10)
-        love.graphics.setLineWidth(1)
+        -- 主面板
+        love.graphics.setColor(0.08, 0.08, 0.15, 0.96)
+        love.graphics.rectangle("fill", 250, 150, 1100, 600, 15, 15)
         
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("GAME OVER", 640, 220, 0, 2.5, 2.5)
+        -- 渐变顶部
+        love.graphics.setColor(0.12, 0.12, 0.22, 0.7)
+        love.graphics.rectangle("fill", 250, 150, 1100, 80, 15, 15)
         
-        -- 胜利者颜色
+        -- 外层发光边框
         if winner == "Red Team" then
-            love.graphics.setColor(1, 0.3, 0.3)
-            love.graphics.print("RED TEAM WINS!", 600, 270, 0, 2.2, 2.2)
+            love.graphics.setColor(1, 0.2, 0.2, 0.4)
         else
-            love.graphics.setColor(0.3, 0.3, 1)
-            love.graphics.print("BLUE TEAM WINS!", 590, 270, 0, 2.2, 2.2)
+            love.graphics.setColor(0.2, 0.2, 1, 0.4)
         end
+        love.graphics.setLineWidth(6)
+        love.graphics.rectangle("line", 248, 148, 1104, 604, 15, 15)
         
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print(string.format("Battle Duration: %.1f seconds", frameCount / 60), 620, 320, 0, 1.2, 1.2)
-        
-        -- 战斗统计对比
-        local statY = 360
-        local lineH = 22
-        
-        love.graphics.setColor(1, 1, 0.5)
-        love.graphics.print("=== BATTLE STATISTICS ===", 590, statY, 0, 1.3, 1.3)
-        
-        statY = statY + lineH + 15
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Metric", 340, statY, 0, 1, 1)
-        love.graphics.setColor(1, 0.3, 0.3)
-        love.graphics.print("RED", 650, statY, 0, 1, 1)
-        love.graphics.setColor(0.3, 0.3, 1)
-        love.graphics.print("BLUE", 950, statY, 0, 1, 1)
-        
-        statY = statY + lineH
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Units Produced:", 340, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.5, 0.5)
-        love.graphics.print(tostring(battleStats.red.unitsProduced), 650, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(0.5, 0.5, 1)
-        love.graphics.print(tostring(battleStats.blue.unitsProduced), 950, statY, 0, 0.9, 0.9)
-        
-        statY = statY + lineH
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Enemy Kills:", 340, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.5, 0.5)
-        love.graphics.print(tostring(battleStats.red.kills), 650, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(0.5, 0.5, 1)
-        love.graphics.print(tostring(battleStats.blue.kills), 950, statY, 0, 0.9, 0.9)
-        
-        statY = statY + lineH
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Tower Kills:", 340, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.5, 0.5)
-        love.graphics.print(tostring(battleStats.red.towerKills), 650, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(0.5, 0.5, 1)
-        love.graphics.print(tostring(battleStats.blue.towerKills), 950, statY, 0, 0.9, 0.9)
-        
-        statY = statY + lineH
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Gold Spent:", 340, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.5, 0.5)
-        love.graphics.print(string.format("$%d", math.floor(battleStats.red.goldSpent)), 650, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(0.5, 0.5, 1)
-        love.graphics.print(string.format("$%d", math.floor(battleStats.blue.goldSpent)), 950, statY, 0, 0.9, 0.9)
-        
-        statY = statY + lineH
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Buildings Built:", 340, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.5, 0.5)
-        love.graphics.print(tostring(battleStats.red.buildingsBuilt), 650, statY, 0, 0.9, 0.9)
-        love.graphics.setColor(0.5, 0.5, 1)
-        love.graphics.print(tostring(battleStats.blue.buildingsBuilt), 950, statY, 0, 0.9, 0.9)
-        
-        love.graphics.setColor(0.9, 0.9, 0.9)
-        love.graphics.print("Press R to Start New Battle", 565, 650, 0, 1.2, 1.2)
-    end
-    
-    -- 绘制选中角色的详细信息（简化版）
-    if selectedAgent and not selectedAgent.isDead and selectedAgent.health > 0 then
-        local infoX = 280
-        local infoY = 250
-        local infoWidth = 420
-        local infoHeight = 300
-        
-        -- 半透明背景
-        love.graphics.setColor(0, 0, 0, 0.9)
-        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 10, 10)
-        
-        -- 边框
-        love.graphics.setColor(selectedAgent.color[1], selectedAgent.color[2], selectedAgent.color[3], 0.9)
-        love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 10, 10)
+        -- 内层边框
+        love.graphics.setColor(0.5, 0.5, 0.6, 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", 250, 150, 1100, 600, 15, 15)
         love.graphics.setLineWidth(1)
         
         -- 标题
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.print("GAME OVER", 557, 172, 0, 3, 3)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("=== UNIT INFO ===", infoX + 140, infoY + 15, 0, 1.5, 1.5)
+        love.graphics.print("GAME OVER", 555, 170, 0, 3, 3)
+        
+        -- 胜利者宣告（带特效）
+        local winY = 235
+        if winner == "Red Team" then
+            -- 红方胜利光晕
+            love.graphics.setColor(1, 0.3, 0.3, 0.2)
+            love.graphics.rectangle("fill", 280, winY - 10, 1040, 55, 8, 8)
+            
+            love.graphics.setColor(0.3, 0, 0, 0.5)
+            love.graphics.print("RED TEAM WINS!", 522, winY + 4, 0, 2.5, 2.5)
+            love.graphics.setColor(1, 0.3, 0.3)
+            love.graphics.print("RED TEAM WINS!", 520, winY + 2, 0, 2.5, 2.5)
+            
+            -- 闪烁效果
+            local pulse = math.sin(love.timer.getTime() * 4) * 0.3 + 0.7
+            love.graphics.setColor(1, 0.5, 0.5, pulse)
+            love.graphics.circle("fill", 480, winY + 15, 8)
+            love.graphics.circle("fill", 1070, winY + 15, 8)
+        else
+            -- 蓝方胜利光晕
+            love.graphics.setColor(0.3, 0.3, 1, 0.2)
+            love.graphics.rectangle("fill", 280, winY - 10, 1040, 55, 8, 8)
+            
+            love.graphics.setColor(0, 0, 0.3, 0.5)
+            love.graphics.print("BLUE TEAM WINS!", 512, winY + 4, 0, 2.5, 2.5)
+            love.graphics.setColor(0.3, 0.3, 1)
+            love.graphics.print("BLUE TEAM WINS!", 510, winY + 2, 0, 2.5, 2.5)
+            
+            local pulse = math.sin(love.timer.getTime() * 4) * 0.3 + 0.7
+            love.graphics.setColor(0.5, 0.5, 1, pulse)
+            love.graphics.circle("fill", 470, winY + 15, 8)
+            love.graphics.circle("fill", 1060, winY + 15, 8)
+        end
+        
+        -- 战斗时长
+        love.graphics.setColor(0.8, 0.8, 0.9)
+        love.graphics.print(string.format("Battle Duration: %.1f seconds", frameCount / 60), 540, 300, 0, 1.3, 1.3)
+        
+        -- 统计标题
+        local statY = 345
+        love.graphics.setColor(1, 0.95, 0.4)
+        love.graphics.print("━━━━━━━ BATTLE STATISTICS ━━━━━━━", 480, statY, 0, 1.4, 1.4)
+        
+        -- 统计表格背景
+        love.graphics.setColor(0.1, 0.1, 0.18, 0.6)
+        love.graphics.rectangle("fill", 290, statY + 35, 1020, 270, 8, 8)
+        
+        -- 表头
+        statY = statY + 50
+        local lineH = 28
+        
+        love.graphics.setColor(0.7, 0.7, 0.8)
+        love.graphics.print("Metric", 330, statY, 0, 1.2, 1.2)
+        
+        love.graphics.setColor(1, 0.4, 0.4)
+        love.graphics.rectangle("fill", 640, statY - 5, 100, 30, 4, 4)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("RED", 665, statY, 0, 1.2, 1.2)
+        
+        love.graphics.setColor(0.4, 0.4, 1)
+        love.graphics.rectangle("fill", 1080, statY - 5, 100, 30, 4, 4)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("BLUE", 1100, statY, 0, 1.2, 1.2)
+        
+        -- 数据行
+        local stats = {
+            {"Units Produced:", battleStats.red.unitsProduced, battleStats.blue.unitsProduced},
+            {"Enemy Kills:", battleStats.red.kills, battleStats.blue.kills},
+            {"Tower Kills:", battleStats.red.towerKills, battleStats.blue.towerKills},
+            {"Gold Spent:", string.format("$%d", math.floor(battleStats.red.goldSpent)), 
+                          string.format("$%d", math.floor(battleStats.blue.goldSpent))},
+            {"Buildings Built:", battleStats.red.buildingsBuilt, battleStats.blue.buildingsBuilt}
+        }
+        
+        for i, stat in ipairs(stats) do
+            statY = statY + lineH
+            
+            -- 交替行背景
+            if i % 2 == 0 then
+                love.graphics.setColor(0.15, 0.15, 0.25, 0.4)
+                love.graphics.rectangle("fill", 300, statY - 3, 1000, 26, 3, 3)
+            end
+            
+            -- 指标名称
+            love.graphics.setColor(0.8, 0.8, 0.9)
+            love.graphics.print(stat[1], 330, statY, 0, 1.1, 1.1)
+            
+            -- 红方数据
+            love.graphics.setColor(1, 0.6, 0.6)
+            love.graphics.print(tostring(stat[2]), 680, statY, 0, 1.1, 1.1)
+            
+            -- 蓝方数据
+            love.graphics.setColor(0.6, 0.6, 1)
+            love.graphics.print(tostring(stat[3]), 1120, statY, 0, 1.1, 1.1)
+        end
+        
+        -- 重启提示（带动画）
+        local pulse = math.sin(love.timer.getTime() * 3) * 0.2 + 0.8
+        love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
+        love.graphics.rectangle("fill", 490, 695, 620, 40, 8, 8)
+        love.graphics.setColor(0.6, 0.9, 1, pulse)
+        love.graphics.print("Press R to Start New Battle", 565, 705, 0, 1.3, 1.3)
+    end
+    
+    -- 绘制选中角色的详细信息（现代美化版）
+    if selectedAgent and not selectedAgent.isDead and selectedAgent.health > 0 then
+        local infoX = 280
+        local infoY = 240
+        local infoWidth = 440
+        local infoHeight = 420
+        
+        -- 主背景
+        love.graphics.setColor(0.08, 0.08, 0.15, 0.94)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 12, 12)
+        
+        -- 渐变头部
+        love.graphics.setColor(selectedAgent.color[1] * 0.3, selectedAgent.color[2] * 0.3, selectedAgent.color[3] * 0.3, 0.7)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, 50, 12, 12)
+        
+        -- 发光边框
+        love.graphics.setColor(selectedAgent.color[1], selectedAgent.color[2], selectedAgent.color[3], 0.4)
+        love.graphics.setLineWidth(4)
+        love.graphics.rectangle("line", infoX - 1, infoY - 1, infoWidth + 2, infoHeight + 2, 12, 12)
+        love.graphics.setColor(selectedAgent.color[1], selectedAgent.color[2], selectedAgent.color[3], 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 12, 12)
+        love.graphics.setLineWidth(1)
+        
+        -- 标题文字
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.print("UNIT INFO", infoX + 157, infoY + 13, 0, 1.6, 1.6)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("UNIT INFO", infoX + 155, infoY + 11, 0, 1.6, 1.6)
         
         -- 基本信息
-        local y = infoY + 50
-        local lineHeight = 22
+        local y = infoY + 60
+        local lineHeight = 24
         
+        -- 单位类型标签
+        love.graphics.setColor(selectedAgent.color[1] * 0.8, selectedAgent.color[2] * 0.8, selectedAgent.color[3] * 0.8, 0.5)
+        love.graphics.rectangle("fill", infoX + 20, y - 5, infoWidth - 40, 32, 5, 5)
         love.graphics.setColor(selectedAgent.color)
         love.graphics.print(string.format("%s Team - %s", selectedAgent.team:upper(), selectedAgent.unitClass), 
-            infoX + 25, y, 0, 1.3, 1.3)
+            infoX + 30, y, 0, 1.3, 1.3)
         
-        y = y + lineHeight + 10
-        -- 健康值
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("Health:", infoX + 25, y, 0, 1.1, 1.1)
+        y = y + 40
+        -- 健康值（带进度条）
+        love.graphics.setColor(0.7, 0.7, 0.8)
+        love.graphics.print("Health:", infoX + 30, y, 0, 1.15, 1.15)
         local hpPercent = selectedAgent.health / selectedAgent.maxHealth
         if hpPercent > 0.6 then
-            love.graphics.setColor(0.3, 1, 0.3)
+            love.graphics.setColor(0.4, 1, 0.4)
         elseif hpPercent > 0.3 then
-            love.graphics.setColor(1, 1, 0.3)
+            love.graphics.setColor(1, 0.9, 0.3)
+        else
+            love.graphics.setColor(1, 0.4, 0.4)
+        end
+        love.graphics.print(string.format("%.0f / %.0f", selectedAgent.health, selectedAgent.maxHealth), 
+            infoX + 180, y, 0, 1.15, 1.15)
+        -- 血条
+        love.graphics.setColor(0.2, 0.2, 0.3, 0.8)
+        love.graphics.rectangle("fill", infoX + 30, y + 20, infoWidth - 60, 6, 3, 3)
+        if hpPercent > 0.6 then
+            love.graphics.setColor(0.3, 0.9, 0.3)
+        elseif hpPercent > 0.3 then
+            love.graphics.setColor(1, 0.8, 0.2)
         else
             love.graphics.setColor(1, 0.3, 0.3)
         end
-        love.graphics.print(string.format("%.0f / %.0f (%.0f%%)", 
-            selectedAgent.health, selectedAgent.maxHealth, hpPercent * 100), 
-            infoX + 150, y, 0, 1.1, 1.1)
+        love.graphics.rectangle("fill", infoX + 30, y + 20, (infoWidth - 60) * hpPercent, 6, 3, 3)
+        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.rectangle("line", infoX + 30, y + 20, infoWidth - 60, 6, 3, 3)
         
-        y = y + lineHeight
+        y = y + lineHeight + 6
         -- 攻击力
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("Attack:", infoX + 25, y, 0, 1.1, 1.1)
-        love.graphics.setColor(1, 0.5, 0.3)
+        love.graphics.setColor(0.7, 0.7, 0.8)
+        love.graphics.print("Attack:", infoX + 30, y, 0, 1.15, 1.15)
+        love.graphics.setColor(1, 0.6, 0.3)
         local displayDamage = selectedAgent.baseDamage or selectedAgent.attackDamage
-        love.graphics.print(string.format("%.1f dmg", displayDamage), infoX + 150, y, 0, 1.1, 1.1)
+        love.graphics.print(string.format("%.1f dmg", displayDamage), infoX + 180, y, 0, 1.15, 1.15)
         
         y = y + lineHeight
         -- 攻击范围
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("Range:", infoX + 25, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("%.0f", selectedAgent.attackRange), infoX + 150, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.7, 0.7, 0.8)
+        love.graphics.print("Range:", infoX + 30, y, 0, 1.15, 1.15)
+        love.graphics.setColor(0.6, 0.7, 1)
+        love.graphics.print(string.format("%.0f", selectedAgent.attackRange), infoX + 180, y, 0, 1.15, 1.15)
         
         y = y + lineHeight
         -- 移动速度
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("Speed:", infoX + 25, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.5, 1, 1)
-        love.graphics.print(string.format("%.0f", selectedAgent.moveSpeed), infoX + 150, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.7, 0.7, 0.8)
+        love.graphics.print("Speed:", infoX + 30, y, 0, 1.15, 1.15)
+        love.graphics.setColor(0.4, 1, 1)
+        love.graphics.print(string.format("%.0f", selectedAgent.moveSpeed), infoX + 180, y, 0, 1.15, 1.15)
         
         y = y + lineHeight
         -- 护甲
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("Armor:", infoX + 25, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.7, 0.7, 0.8)
+        love.graphics.print("Armor:", infoX + 30, y, 0, 1.15, 1.15)
         love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("%.0f%% reduction", selectedAgent.armor * 100), infoX + 150, y, 0, 1.1, 1.1)
+        love.graphics.print(string.format("%.0f%% reduction", selectedAgent.armor * 100), infoX + 180, y, 0, 1.15, 1.15)
         
-        y = y + lineHeight + 10
-        -- 特殊能力
-        love.graphics.setColor(1, 1, 0.5)
-        love.graphics.print("-- Special Abilities --", infoX + 25, y, 0, 1.1, 1.1)
+        y = y + lineHeight + 8
+        -- 特殊能力分隔线
+        love.graphics.setColor(0.5, 0.5, 0.6, 0.5)
+        love.graphics.setLineWidth(2)
+        love.graphics.line(infoX + 30, y, infoX + infoWidth - 30, y)
+        love.graphics.setLineWidth(1)
         
-        y = y + lineHeight
+        y = y + 6
+        love.graphics.setColor(1, 0.9, 0.4)
+        love.graphics.print("SPECIAL ABILITIES", infoX + 30, y, 0, 1.1, 1.1)
+        
+        y = y + lineHeight - 2
+        local hasAbility = false
         if selectedAgent.hasRegen then
             love.graphics.setColor(0.3, 1, 0.3)
-            love.graphics.print("[Regen] +1 HP/sec", infoX + 25, y, 0, 1, 1)
+            love.graphics.print("[Regen] +1 HP/sec", infoX + 30, y, 0, 1.0, 1.0)
+            y = y + lineHeight - 6
+            hasAbility = true
         end
         if selectedAgent.hasBerserk then
-            y = y + (selectedAgent.hasRegen and lineHeight or 0)
             if selectedAgent.isBerserk then
                 love.graphics.setColor(1, 0.3, 0)
                 love.graphics.print(string.format("[BERSERK] %.1fx damage!", selectedAgent.berserkPower or 1.5), 
-                    infoX + 25, y, 0, 1, 1)
+                    infoX + 30, y, 0, 1.0, 1.0)
             else
                 love.graphics.setColor(1, 0.7, 0.3)
                 love.graphics.print(string.format("[Berserk] Ready (< %.0f%% HP)", 
-                    selectedAgent.berserkThreshold * 100), infoX + 25, y, 0, 1, 1)
+                    selectedAgent.berserkThreshold * 100), infoX + 30, y, 0, 1.0, 1.0)
             end
+            y = y + lineHeight - 6
+            hasAbility = true
         end
         
-        y = y + lineHeight + 10
-        -- 当前状态
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("-- Status --", infoX + 25, y, 0, 1.1, 1.1)
+        -- 如果没有特殊能力，显示提示
+        if not hasAbility then
+            love.graphics.setColor(0.6, 0.6, 0.6)
+            love.graphics.print("None", infoX + 30, y, 0, 1.0, 1.0)
+            y = y + lineHeight - 6
+        end
         
-        y = y + lineHeight
+        y = y + 8
+        -- 状态分隔线
+        love.graphics.setColor(0.5, 0.5, 0.6, 0.5)
+        love.graphics.setLineWidth(2)
+        love.graphics.line(infoX + 30, y, infoX + infoWidth - 30, y)
+        love.graphics.setLineWidth(1)
+        
+        y = y + 6
+        -- 当前状态
+        love.graphics.setColor(1, 0.9, 0.4)
+        love.graphics.print("STATUS", infoX + 30, y, 0, 1.1, 1.1)
+        
+        y = y + lineHeight - 2
         love.graphics.setColor(0.8, 0.8, 1)
         if selectedAgent.currentAction then
-            love.graphics.print("Action: " .. selectedAgent.currentAction.name, infoX + 25, y, 0, 1, 1)
+            love.graphics.print("Action: " .. selectedAgent.currentAction.name, infoX + 30, y, 0, 1.0, 1.0)
         else
-            love.graphics.print("Action: Planning...", infoX + 25, y, 0, 1, 1)
+            love.graphics.print("Action: Planning...", infoX + 30, y, 0, 1.0, 1.0)
         end
         
-        y = y + lineHeight
+        y = y + lineHeight - 6
         if selectedAgent.target then
             love.graphics.setColor(1, 0.5, 0.5)
-            love.graphics.print(string.format("Target: HP %.0f", selectedAgent.target.health), infoX + 25, y, 0, 1, 1)
+            love.graphics.print(string.format("Target: HP %.0f", selectedAgent.target.health), infoX + 30, y, 0, 1.0, 1.0)
         else
             love.graphics.setColor(0.7, 0.7, 0.7)
-            love.graphics.print("Target: None", infoX + 25, y, 0, 1, 1)
+            love.graphics.print("Target: None", infoX + 30, y, 0, 1.0, 1.0)
         end
         
         -- 关闭提示
-        love.graphics.setColor(1, 1, 1, 0.7)
-        love.graphics.print("Click to close", infoX + 160, infoY + infoHeight - 25, 0, 1, 1)
+        love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
+        love.graphics.rectangle("fill", infoX + 140, infoY + infoHeight - 35, 160, 25, 4, 4)
+        love.graphics.setColor(0.8, 0.9, 1, 0.9)
+        love.graphics.print("Click to close", infoX + 162, infoY + infoHeight - 30, 0, 1.0, 1.0)
     end
     
     -- 绘制选中基地的详细信息
     if selectedBase and not selectedBase.isDead then
         local infoX = 550
-        local infoY = 250
+        local infoY = 200
         local infoWidth = 500
-        local infoHeight = 350
+        local infoHeight = 480
         
-        -- 半透明背景
-        love.graphics.setColor(0, 0, 0, 0.9)
-        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight)
+        -- 半透明背景（现代设计）
+        love.graphics.setColor(0.08, 0.08, 0.15, 0.94)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 12, 12)
         
-        -- 边框
-        love.graphics.setColor(selectedBase.color[1], selectedBase.color[2], selectedBase.color[3], 0.8)
+        -- 渐变头部
+        love.graphics.setColor(selectedBase.color[1] * 0.3, selectedBase.color[2] * 0.3, selectedBase.color[3] * 0.3, 0.7)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, 50, 12, 12)
+        
+        -- 发光边框
+        love.graphics.setColor(selectedBase.color[1], selectedBase.color[2], selectedBase.color[3], 0.4)
         love.graphics.setLineWidth(4)
-        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight)
+        love.graphics.rectangle("line", infoX - 1, infoY - 1, infoWidth + 2, infoHeight + 2, 12, 12)
+        love.graphics.setColor(selectedBase.color[1], selectedBase.color[2], selectedBase.color[3], 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 12, 12)
         love.graphics.setLineWidth(1)
         
         -- 标题
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.print("BASE INFO", infoX + 182, infoY + 13, 0, 1.6, 1.6)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("=== BASE INFO ===", infoX + 160, infoY + 15, 0, 1.8, 1.8)
+        love.graphics.print("BASE INFO", infoX + 180, infoY + 11, 0, 1.6, 1.6)
         
         local y = infoY + 60
-        local lineHeight = 30
+        local lineHeight = 24
         
         -- 基地信息
         love.graphics.setColor(selectedBase.color)
-        love.graphics.print(string.format("Team: %s", selectedBase.team:upper()), infoX + 40, y, 0, 1.4, 1.4)
+        love.graphics.print(string.format("Team: %s", selectedBase.team:upper()), infoX + 40, y, 0, 1.3, 1.3)
         
-        y = y + lineHeight + 10
+        y = y + lineHeight + 5
         love.graphics.setColor(0.3, 1, 0.3)
         love.graphics.print(string.format("Health: %.0f / %.0f (%.0f%%)", 
             selectedBase.health, selectedBase.maxHealth, 
-            (selectedBase.health / selectedBase.maxHealth) * 100), infoX + 40, y, 0, 1.2, 1.2)
+            (selectedBase.health / selectedBase.maxHealth) * 100), infoX + 40, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
         love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("Armor: %.0f%% damage reduction", 
-            selectedBase.armor * 100), infoX + 40, y, 0, 1.2, 1.2)
+        love.graphics.print(string.format("Armor: %.0f%% reduction", 
+            selectedBase.armor * 100), infoX + 40, y, 0, 1.1, 1.1)
         
         y = y + lineHeight
         love.graphics.setColor(1, 1, 0.7)
         love.graphics.print(string.format("Position: (%.0f, %.0f)", 
-            selectedBase.x, selectedBase.y), infoX + 40, y, 0, 1.1, 1.1)
+            selectedBase.x, selectedBase.y), infoX + 40, y, 0, 1.0, 1.0)
         
-        y = y + lineHeight + 15
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Resource Economy ---", infoX + 40, y, 0, 1.2, 1.2)
+        y = y + lineHeight + 8
+        love.graphics.setColor(1, 0.9, 0.4)
+        love.graphics.print("RESOURCE ECONOMY", infoX + 40, y, 0, 1.15, 1.15)
         
         y = y + lineHeight
         love.graphics.setColor(1, 0.84, 0)
         love.graphics.print(string.format("Resources: $%d / $%d", 
-            selectedBase.resources, selectedBase.maxResources), infoX + 40, y, 0, 1.1, 1.1)
+            selectedBase.resources, selectedBase.maxResources), infoX + 40, y, 0, 1.05, 1.05)
         
         y = y + lineHeight
         love.graphics.setColor(0.9, 0.9, 0.5)
         love.graphics.print(string.format("Mining Rate: $%.0f/sec | Range: %.0f", 
-            selectedBase.miningRate, selectedBase.miningRange), infoX + 40, y, 0, 1, 1)
+            selectedBase.miningRate, selectedBase.miningRange), infoX + 40, y, 0, 0.95, 0.95)
         
-        y = y + lineHeight + 5
+        y = y + lineHeight + 2
         love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Unit Costs:", infoX + 40, y, 0, 1.1, 1.1)
-        y = y + lineHeight - 5
+        love.graphics.print("Unit Costs:", infoX + 40, y, 0, 1.05, 1.05)
+        y = y + lineHeight - 4
         love.graphics.setColor(0.7, 0.9, 0.7)
         love.graphics.print(string.format("  Soldier: $%d | Gunner: $%d", 
-            selectedBase.unitCosts.Soldier, selectedBase.unitCosts.Gunner), infoX + 50, y, 0, 0.95, 0.95)
-        y = y + lineHeight - 5
+            selectedBase.unitCosts.Soldier, selectedBase.unitCosts.Gunner), infoX + 50, y, 0, 0.9, 0.9)
+        y = y + lineHeight - 6
         love.graphics.print(string.format("  Sniper: $%d | Tank: $%d", 
-            selectedBase.unitCosts.Sniper, selectedBase.unitCosts.Tank), infoX + 50, y, 0, 0.95, 0.95)
+            selectedBase.unitCosts.Sniper, selectedBase.unitCosts.Tank), infoX + 50, y, 0, 0.9, 0.9)
         
-        y = y + lineHeight + 15
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Production System ---", infoX + 40, y, 0, 1.2, 1.2)
+        y = y + lineHeight + 6
+        love.graphics.setColor(1, 0.9, 0.4)
+        love.graphics.print("PRODUCTION SYSTEM", infoX + 40, y, 0, 1.15, 1.15)
         
         y = y + lineHeight
         love.graphics.setColor(0.5, 1, 1)
-        love.graphics.print(string.format("Production Speed: %.1f seconds/unit", 
-            selectedBase.productionTime), infoX + 40, y, 0, 1.1, 1.1)
+        love.graphics.print(string.format("Production Speed: %.1f sec/unit", 
+            selectedBase.productionTime), infoX + 40, y, 0, 1.05, 1.05)
         
         y = y + lineHeight
         love.graphics.setColor(1, 0.8, 0.5)
         love.graphics.print(string.format("Max Units: %d", 
-            selectedBase.maxUnits), infoX + 40, y, 0, 1.1, 1.1)
+            selectedBase.maxUnits), infoX + 40, y, 0, 1.05, 1.05)
         
         y = y + lineHeight
         love.graphics.setColor(0.8, 1, 0.8)
         love.graphics.print(string.format("Units Produced: %d", 
-            selectedBase.unitsProduced), infoX + 40, y, 0, 1.1, 1.1)
+            selectedBase.unitsProduced), infoX + 40, y, 0, 1.05, 1.05)
         
         if selectedBase.productionProgress > 0 then
             y = y + lineHeight
             love.graphics.setColor(0.3, 1, 1)
             love.graphics.print(string.format("Current Production: %.0f%%", 
-                selectedBase.productionProgress * 100), infoX + 40, y, 0, 1.1, 1.1)
+                selectedBase.productionProgress * 100), infoX + 40, y, 0, 1.05, 1.05)
         end
         
         -- 关闭提示
-        love.graphics.setColor(1, 1, 1, 0.8)
-        love.graphics.print("Click anywhere to close", infoX + 150, infoY + infoHeight - 35, 0, 1.2, 1.2)
+        love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
+        love.graphics.rectangle("fill", infoX + 170, infoY + infoHeight - 35, 160, 25, 4, 4)
+        love.graphics.setColor(0.8, 0.9, 1, 0.9)
+        love.graphics.print("Click to close", infoX + 192, infoY + infoHeight - 30, 0, 1.0, 1.0)
     end
     
     -- 绘制兵营信息面板
     if selectedBarracks and not selectedBarracks.isDead then
-        local infoX, infoY = 820, 250
-        local infoWidth, infoHeight = 480, 380
+        local infoX, infoY = 820, 200
+        local infoWidth, infoHeight = 480, 460
         
-        -- 半透明背景
-        love.graphics.setColor(0, 0, 0, 0.85)
-        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 10, 10)
+        -- 半透明背景（现代设计）
+        love.graphics.setColor(0.08, 0.08, 0.15, 0.94)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 12, 12)
         
-        -- 边框
-        love.graphics.setColor(selectedBarracks.color)
-        love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 10, 10)
+        -- 渐变头部
+        love.graphics.setColor(selectedBarracks.color[1] * 0.3, selectedBarracks.color[2] * 0.3, selectedBarracks.color[3] * 0.3, 0.7)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, 50, 12, 12)
+        
+        -- 发光边框
+        love.graphics.setColor(selectedBarracks.color[1], selectedBarracks.color[2], selectedBarracks.color[3], 0.4)
+        love.graphics.setLineWidth(4)
+        love.graphics.rectangle("line", infoX - 1, infoY - 1, infoWidth + 2, infoHeight + 2, 12, 12)
+        love.graphics.setColor(selectedBarracks.color[1], selectedBarracks.color[2], selectedBarracks.color[3], 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 12, 12)
         love.graphics.setLineWidth(1)
         
         -- 标题
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.print("BARRACKS INFO", infoX + 152, infoY + 13, 0, 1.6, 1.6)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("=== BARRACKS INFO ===", infoX + 140, infoY + 15, 0, 1.5, 1.5)
+        love.graphics.print("BARRACKS INFO", infoX + 150, infoY + 11, 0, 1.6, 1.6)
         
-        local y = infoY + 50
-        local lineHeight = 25
+        local y = infoY + 60
+        local lineHeight = 24
         
         -- 兵营信息
         love.graphics.setColor(selectedBarracks.teamColor)
         love.graphics.print(string.format("%s - %s Team", selectedBarracks.name, 
-            selectedBarracks.team:upper()), infoX + 40, y, 0, 1.3, 1.3)
+            selectedBarracks.team:upper()), infoX + 40, y, 0, 1.2, 1.2)
         
-        y = y + lineHeight + 10
+        y = y + lineHeight + 6
         
         if selectedBarracks.isBuilding then
             -- 建造中
             love.graphics.setColor(1, 0.8, 0.2)
-            love.graphics.print("STATUS: UNDER CONSTRUCTION", infoX + 40, y, 0, 1.2, 1.2)
+            love.graphics.print("STATUS: UNDER CONSTRUCTION", infoX + 40, y, 0, 1.15, 1.15)
             
             y = y + lineHeight
             love.graphics.setColor(0.5, 1, 0.5)
             love.graphics.print(string.format("Build Progress: %.0f%%", 
                 (selectedBarracks.buildProgress / selectedBarracks.buildTime) * 100), 
-                infoX + 40, y, 0, 1.1, 1.1)
+                infoX + 40, y, 0, 1.05, 1.05)
             
             y = y + lineHeight
             love.graphics.setColor(0.7, 0.7, 0.7)
             love.graphics.print(string.format("Time Remaining: %.1f seconds", 
                 selectedBarracks.buildTime - selectedBarracks.buildProgress), 
-                infoX + 40, y, 0, 1, 1)
+                infoX + 40, y, 0, 0.95, 0.95)
         else
             -- 已完成
             love.graphics.setColor(0.3, 1, 0.3)
-            love.graphics.print("STATUS: OPERATIONAL", infoX + 40, y, 0, 1.2, 1.2)
+            love.graphics.print("STATUS: OPERATIONAL", infoX + 40, y, 0, 1.15, 1.15)
             
-            y = y + lineHeight + 10
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.print("--- Production Details ---", infoX + 40, y, 0, 1.2, 1.2)
+            y = y + lineHeight + 6
+            love.graphics.setColor(1, 0.9, 0.4)
+            love.graphics.print("PRODUCTION DETAILS", infoX + 40, y, 0, 1.15, 1.15)
             
             y = y + lineHeight
             love.graphics.setColor(0.5, 1, 1)
             love.graphics.print(string.format("Produces: %s", selectedBarracks.producesUnit), 
-                infoX + 40, y, 0, 1.1, 1.1)
+                infoX + 40, y, 0, 1.05, 1.05)
             
             y = y + lineHeight
             love.graphics.setColor(1, 0.84, 0)
             love.graphics.print(string.format("Production Cost: $%d", 
-                selectedBarracks.productionCost), infoX + 40, y, 0, 1.1, 1.1)
+                selectedBarracks.productionCost), infoX + 40, y, 0, 1.05, 1.05)
             
             y = y + lineHeight
             love.graphics.setColor(0.8, 0.8, 1)
             love.graphics.print(string.format("Production Time: %.1f seconds", 
-                selectedBarracks.productionTime), infoX + 40, y, 0, 1.1, 1.1)
+                selectedBarracks.productionTime), infoX + 40, y, 0, 1.05, 1.05)
             
             y = y + lineHeight
             love.graphics.setColor(0.8, 1, 0.8)
             love.graphics.print(string.format("Units Produced: %d", 
-                selectedBarracks.unitsProduced), infoX + 40, y, 0, 1.1, 1.1)
+                selectedBarracks.unitsProduced), infoX + 40, y, 0, 1.05, 1.05)
             
             if selectedBarracks.isProducing then
                 y = y + lineHeight
                 love.graphics.setColor(0.3, 1, 1)
                 love.graphics.print(string.format("Current Production: %.0f%%", 
                     (selectedBarracks.productionProgress / selectedBarracks.productionTime) * 100), 
-                    infoX + 40, y, 0, 1.1, 1.1)
+                    infoX + 40, y, 0, 1.05, 1.05)
             end
         end
         
-        y = y + lineHeight + 15
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("--- Structure Stats ---", infoX + 40, y, 0, 1.2, 1.2)
+        y = y + lineHeight + 8
+        love.graphics.setColor(1, 0.9, 0.4)
+        love.graphics.print("STRUCTURE STATS", infoX + 40, y, 0, 1.15, 1.15)
         
         y = y + lineHeight
         love.graphics.setColor(0.3, 1, 0.3)
         love.graphics.print(string.format("Health: %.0f / %.0f (%.0f%%)", 
             selectedBarracks.health, selectedBarracks.maxHealth,
             (selectedBarracks.health / selectedBarracks.maxHealth) * 100), 
-            infoX + 40, y, 0, 1.1, 1.1)
+            infoX + 40, y, 0, 1.05, 1.05)
         
         y = y + lineHeight
         love.graphics.setColor(1, 1, 0.7)
         love.graphics.print(string.format("Position: (%.0f, %.0f)", 
-            selectedBarracks.x, selectedBarracks.y), infoX + 40, y, 0, 1.1, 1.1)
+            selectedBarracks.x, selectedBarracks.y), infoX + 40, y, 0, 1.0, 1.0)
         
-        y = y + lineHeight + 10
+        y = y + lineHeight + 6
         love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print(selectedBarracks.description, infoX + 40, y, 0, 1, 1)
+        love.graphics.print(selectedBarracks.description, infoX + 40, y, 0, 0.95, 0.95)
         
         -- 关闭提示
-        love.graphics.setColor(1, 1, 1, 0.8)
-        love.graphics.print("Click anywhere to close", infoX + 150, infoY + infoHeight - 35, 0, 1.2, 1.2)
+        love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
+        love.graphics.rectangle("fill", infoX + 160, infoY + infoHeight - 35, 160, 25, 4, 4)
+        love.graphics.setColor(0.8, 0.9, 1, 0.9)
+        love.graphics.print("Click to close", infoX + 182, infoY + infoHeight - 30, 0, 1.0, 1.0)
     end
 end
 
