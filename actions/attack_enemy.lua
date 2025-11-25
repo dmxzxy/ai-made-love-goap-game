@@ -77,6 +77,26 @@ function AttackEnemy:perform(agent, dt)
     -- 暴击判定
     local isCrit = math.random() < agent.critChance
     
+    -- 攻击前特效（子弹轨迹）
+    local Particles = require("effects.particles")
+    if agent.unitClass == "Sniper" or agent.unitClass == "Ranger" then
+        -- 远程单位：子弹轨迹
+        Particles.createBulletTrail(agent.x, agent.y, agent.target.x, agent.target.y, agent.color)
+    elseif agent.unitClass == "Gunner" then
+        -- 机枪手：连续子弹
+        for i = 1, 3 do
+            Particles.createBulletTrail(
+                agent.x + (math.random() - 0.5) * 10, 
+                agent.y + (math.random() - 0.5) * 10, 
+                agent.target.x, agent.target.y, 
+                {1, 0.8, 0.3}
+            )
+        end
+    else
+        -- 近战单位：火花效果
+        Particles.createSparks(agent.x + dx * 0.3, agent.y + dy * 0.3, {1, 0.7, 0.3}, 5)
+    end
+    
     -- 攻击
     local damage = agent.attackDamage
     local actualDamage = agent.target:takeDamage(damage, isCrit, agent)  -- 传递攻击者

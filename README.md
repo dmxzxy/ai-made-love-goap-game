@@ -2,6 +2,103 @@
 
 A large-scale real-time strategy game built with Love2D and GOAP (Goal-Oriented Action Planning) AI system.
 
+## 🎨 Visual Effects System (NEW!)
+
+### Particle Effects
+- **Combat Effects**:
+  - Bullet trails for ranged units (Sniper, Gunner, Ranger)
+  - Muzzle flashes and sparks for melee combat
+  - Blood splatters on hit
+  - Explosion particles for critical hits
+- **Death Effects**:
+  - Multi-layered explosion on unit death
+  - Debris and smoke particles
+  - Shockwave ripples
+- **Tower Effects**:
+  - Arrow Tower: Arrow trails with impact sparks
+  - Cannon Tower: Ballistic trajectory + massive explosion with camera shake
+  - Laser Tower: Continuous energy beam particles
+  - Frost Tower: Ice projectiles + freezing pulse effect
+- **Special Effects**:
+  - Gold coins flying to base during mining
+  - Energy pulses for building construction
+  - Smoke trails for damaged units
+
+### Floating Damage Numbers
+- **Dynamic Combat Feedback**:
+  - Normal damage: White floating numbers
+  - Critical hits: Large golden numbers with glow effect
+  - High armor: Blue-tinted damage display
+  - Dodge: Green "DODGE" text with particles
+  - Smooth fade-out and arc animations
+
+### Camera System
+- **Screen Shake**:
+  - Small shake on unit death (intensity: 2)
+  - Medium shake on critical hits (intensity: 3)
+  - Heavy shake on cannon tower explosions (intensity: 4)
+- **Dynamic Background**:
+  - Grid battlefield layout (100px cells)
+  - Team-colored territory zones (red/blue tint)
+  - Enhanced center dividing line
+
+### Animation System
+- **Unit Movement**:
+  - Bobbing animation while moving (3px vertical oscillation)
+  - Direction-based rotation
+  - Speed-based animation frequency
+- **Attack Animations**:
+  - Enhanced attack lines with double-layer glow
+  - Expanding shockwave circles on impact
+  - Weapon-specific visual effects
+
+### Unit Leveling System (NEW!)
+- **Experience & Progression**:
+  - Units gain 1 EXP per kill
+  - 5 levels max (requires 3/5/7/9 kills per level)
+  - Each level up: Full heal + 10% all stats boost + 5% range increase
+- **Visual Progression**:
+  - Level 1: Normal appearance
+  - Level 2: Green aura (Veteran)
+  - Level 3: Blue aura (Elite)
+  - Level 4: Purple aura (Champion)
+  - Level 5: Golden aura (Legend)
+- **Level Up Effects**:
+  - Golden energy pulse explosion
+  - Rotating stars around unit (count = level)
+  - 1.5s visual celebration
+  - 5% size increase per level
+  - Camera shake on level up
+
+### Minimap System (NEW!)
+- **Location**: Bottom-right corner (200x200px)
+- **Features**:
+  - Real-time unit tracking (red/blue dots)
+  - Base locations with health rings
+  - Tower and barracks markers
+  - Resource nodes with depletion indicators
+  - Grid overlay with team-colored zones
+  - Unit counters (Red: X, Blue: Y)
+- **Interaction**:
+  - Click minimap to instantly jump camera to location
+  - Hover for detailed view
+  - Updates every frame for accuracy
+
+### Battle Notifications System (NEW!)
+- **Real-time Combat Alerts**:
+  - **Base Under Attack**: Red warning notification when base takes damage (5s cooldown)
+  - **Unit Level Up**: Golden celebration notification when units reach new levels
+  - **Building Complete**: Green notification for barracks/tower construction
+  - **Victory/Defeat**: Large announcement when game ends
+- **Visual Design**:
+  - Animated slide-in from top (smooth 60fps animation)
+  - Color-coded by notification type (red=danger, gold=achievement, green=success)
+  - Team-colored badges
+  - Life bar showing remaining display time (4s duration)
+  - Auto-stacking with max 5 notifications
+  - Fade-out animation when expiring
+- **Smart Anti-Spam**: Duplicate messages within 2s are filtered
+
 ## Features
 
 ### 🤖 GOAP AI System

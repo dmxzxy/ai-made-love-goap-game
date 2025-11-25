@@ -212,6 +212,15 @@ function Base:takeDamage(damage, isCrit, attacker)
     self.health = self.health - actualDamage
     self.flashTime = 0.15
     
+    -- 触发基地受攻击警告（每5秒最多一次）
+    if not self.lastWarningTime or (love.timer.getTime() - self.lastWarningTime) > 5 then
+        self.lastWarningTime = love.timer.getTime()
+        -- 全局函数调用（将在main.lua中定义）
+        if BattleNotifications then
+            BattleNotifications.baseUnderAttack(self.team)
+        end
+    end
+    
     return actualDamage
 end
 

@@ -7,6 +7,9 @@ local Idle = require("actions.idle")
 -- 暂时禁用Retreat以确保游戏稳定运行
 -- local Retreat = require("actions.retreat")
 
+-- 延迟加载特效系统（避免循环依赖）
+local Particles, DamageNumbers
+
 local Agent = {}
 Agent.__index = Agent
 
@@ -205,6 +208,13 @@ function Agent.new(x, y, team, color, unitClass)
     self.isDead = false
     self.regenEffect = 0  -- 恢复特效
     
+    -- 升级系统（老兵特效）
+    self.kills = 0          -- 击杀数
+    self.level = 1          -- 等级（1-5）
+    self.experience = 0     -- 经验值
+    self.expForNextLevel = 3  -- 下一级所需经验
+    self.levelUpEffect = 0  -- 升级特效时间
+    
     -- GOAP相关
     self.planner = Planner.new()
     
@@ -269,6 +279,15 @@ function Agent:update(dt)
     if self.health <= 0 then
         self.isDead = true
         self.deathTime = 0
+        
+        -- 死亡特效
+        if not Particles then
+            Particles = require("effects.particles")
+        end
+        Particles.createDeathExplosion(self.x, self.y, self.color, self.radius / 20)
+        Particles.createSmoke(self.x, self.y, {0.3, 0.3, 0.3}, 8)
+        addCameraShake(2)
+        
         return
     end
     
@@ -282,6 +301,11 @@ function Agent:update(dt)
         if self.attackEffect.time > 0.3 then
             self.attackEffect = nil
         end
+    end
+    
+    -- 升级特效倒计时
+    if self.levelUpEffect > 0 then
+        self.levelUpEffect = self.levelUpEffect - dt
     end
     
     -- 生命恢复
@@ -554,6 +578,12 @@ end
 function Agent:takeDamage(damage, isCrit, attacker)
     if self.isDead then return 0 end
     
+    -- 延迟加载特效系统
+    if not Particles then
+        Particles = require("effects.particles")
+        DamageNumbers = require("effects.damage_numbers")
+    end
+    
     -- 记录攻击者（用于反击）
     if attacker and not self.isMiner then
         self.lastAttacker = attacker
@@ -563,6 +593,7 @@ function Agent:takeDamage(damage, isCrit, attacker)
     -- 闪避判定
     if math.random() < self.dodgeChance then
         self:addDamageNumber("DODGE", {0.5, 1, 0.5}, true)
+        Particles.createHitEffect(self.x, self.y - self.radius, {0.5, 1, 0.5})
         return 0
     end
     
@@ -584,11 +615,35 @@ function Agent:takeDamage(damage, isCrit, attacker)
     end
     self:addDamageNumber(string.format("%.0f", actualDamage), color, isCrit)
     
+    -- 检查是否被击杀
+    if self.health <= 0 and attacker and not attacker.isDead then
+        attacker:addKill()  -- 攻击者获得击杀奖励
+    end
+    
+    -- 创建击中特效
+    if isCrit then
+        Particles.createSparks(self.x, self.y, {1, 0.9, 0.3}, 12)
+        addCameraShake(3)  -- 暴击震动
+    else
+        Particles.createBloodSplatter(self.x, self.y, self.color)
+        Particles.createHitEffect(self.x, self.y - self.radius, {1, 0.8, 0.3})
+    end
+    
     return actualDamage
 end
 
 -- 添加伤害数字
 function Agent:addDamageNumber(text, color, isCrit)
+    -- 延迟加载特效系统
+    if not DamageNumbers then
+        DamageNumbers = require("effects.damage_numbers")
+    end
+    
+    -- 使用新的伤害数字系统
+    local damage = tonumber(text) or 0
+    DamageNumbers.add(self.x, self.y - self.radius, damage, isCrit, false)
+    
+    -- 保留旧系统作为备份
     table.insert(self.damageNumbers, {
         text = text,
         x = self.x + math.random(-20, 20),
@@ -597,6 +652,54 @@ function Agent:addDamageNumber(text, color, isCrit)
         color = color,
         isCrit = isCrit
     })
+end
+
+-- 击杀奖励（升级系统）
+function Agent:addKill()
+    self.kills = self.kills + 1
+    self.experience = self.experience + 1
+    
+    -- 检查升级
+    if self.experience >= self.expForNextLevel and self.level < 5 then
+        self:levelUp()
+    end
+end
+
+-- 升级
+function Agent:levelUp()
+    self.level = self.level + 1
+    self.experience = 0
+    self.expForNextLevel = self.expForNextLevel + 2  -- 每级需要更多经验
+    
+    -- 升级特效
+    self.levelUpEffect = 1.5  -- 1.5秒升级特效
+    
+    -- 属性提升（10%全属性）
+    local boost = 1.1
+    self.maxHealth = self.maxHealth * boost
+    self.health = self.maxHealth  -- 升级回满血
+    self.attackDamage = self.attackDamage * boost
+    self.moveSpeed = self.moveSpeed * boost
+    self.attackRange = self.attackRange * 1.05  -- 射程提升5%
+    
+    -- 半径增大（视觉效果）
+    self.radius = self.radius * 1.05
+    
+    -- 创建升级特效
+    if not Particles then
+        Particles = require("effects.particles")
+    end
+    Particles.createEnergyPulse(self.x, self.y, {1, 1, 0.3}, 5)
+    Particles.createEnergyPulse(self.x, self.y, self.color, 8)
+    addCameraShake(1)
+    
+    -- 触发升级通知
+    if BattleNotifications then
+        BattleNotifications.unitLeveledUp(self.team, self.unitClass, self.level)
+    end
+    
+    print(string.format("[%s] LEVEL UP! %s reached Level %d (Kills: %d)", 
+        self.team, self.unitClass, self.level, self.kills))
 end
 
 -- 创建攻击特效
@@ -625,23 +728,75 @@ function Agent:draw()
     -- 使用之前计算好的士气比率，如果没有则默认为1.0
     local moraleRatio = self.moraleRatio or 1.0
     
+    -- 移动摇摆动画
+    local bobOffset = 0
+    local time = love.timer.getTime()
+    if self.currentAction and self.currentAction.name == "MoveToEnemy" then
+        bobOffset = math.sin(time * 8) * 3  -- 上下摇摆
+    end
+    
+    -- 升级特效（金色光环）
+    if self.levelUpEffect > 0 then
+        local effectAlpha = self.levelUpEffect / 1.5
+        local pulse = 0.7 + math.sin(time * 15) * 0.3
+        
+        -- 外层爆发光环
+        love.graphics.setColor(1, 1, 0.3, effectAlpha * 0.4 * pulse)
+        love.graphics.circle("fill", self.x, self.y + bobOffset, self.radius * (2.5 - effectAlpha))
+        
+        -- 中层闪光
+        love.graphics.setColor(1, 0.9, 0.5, effectAlpha * 0.6)
+        love.graphics.circle("fill", self.x, self.y + bobOffset, self.radius * (1.8 - effectAlpha * 0.5))
+        
+        -- 旋转星星（等级标识）
+        for i = 1, self.level do
+            local angle = (i / self.level) * math.pi * 2 + time * 3
+            local dist = self.radius * 2.5
+            local sx = self.x + math.cos(angle) * dist
+            local sy = self.y + bobOffset + math.sin(angle) * dist
+            love.graphics.setColor(1, 1, 0, effectAlpha)
+            love.graphics.circle("fill", sx, sy, 3)
+        end
+    end
+    
+    -- 等级光环（常驻，老兵发光）
+    if self.level > 1 then
+        local levelColor = {
+            [2] = {0.8, 1, 0.8},    -- 2级：淡绿
+            [3] = {0.8, 0.8, 1},    -- 3级：淡蓝
+            [4] = {1, 0.8, 1},      -- 4级：淡紫
+            [5] = {1, 1, 0.5}       -- 5级：金色
+        }
+        local color = levelColor[self.level] or {1, 1, 1}
+        local pulse = 0.3 + math.sin(time * 4) * 0.2
+        love.graphics.setColor(color[1], color[2], color[3], pulse)
+        love.graphics.circle("line", self.x, self.y + bobOffset, self.radius + 4)
+        love.graphics.circle("line", self.x, self.y + bobOffset, self.radius + 6)
+    end
+    
     -- 绘制攻击范围圈（半透明，士气影响透明度）
     if self.currentAction and self.currentAction.name == "AttackEnemy" then
         local rangeAlpha = 0.1 * (0.5 + moraleRatio * 0.5)
         love.graphics.setColor(self.color[1], self.color[2], self.color[3], rangeAlpha)
-        love.graphics.circle("fill", self.x, self.y, self.attackRange)
+        love.graphics.circle("fill", self.x, self.y + bobOffset, self.attackRange)
     end
     
-    -- 绘制攻击特效
+    -- 绘制攻击特效（增强版）
     if self.attackEffect then
         local progress = self.attackEffect.time / 0.3
         local alpha = 1 - progress
-        love.graphics.setColor(1, 1, 0, alpha)
-        love.graphics.setLineWidth(3)
-        love.graphics.line(self.x, self.y, self.attackEffect.targetX, self.attackEffect.targetY)
+        
+        -- 攻击闪光线
+        love.graphics.setColor(1, 1, 0.3, alpha * 0.6)
+        love.graphics.setLineWidth(5)
+        love.graphics.line(self.x, self.y + bobOffset, self.attackEffect.targetX, self.attackEffect.targetY)
+        love.graphics.setColor(1, 0.8, 0.2, alpha)
+        love.graphics.setLineWidth(2)
+        love.graphics.line(self.x, self.y + bobOffset, self.attackEffect.targetX, self.attackEffect.targetY)
         love.graphics.setLineWidth(1)
         
         -- 攻击冲击波
+        love.graphics.setColor(1, 0.8, 0.2, alpha * 0.5)
         love.graphics.circle("line", self.attackEffect.targetX, self.attackEffect.targetY, progress * 30)
     end
     
@@ -656,9 +811,9 @@ function Agent:draw()
     
     -- 狂暴状态发光
     if self.isBerserk then
-        local pulse = 0.3 + math.sin(love.timer.getTime() * 10) * 0.2
+        local pulse = 0.3 + math.sin(time * 10) * 0.2
         love.graphics.setColor(1, 0.2, 0, pulse)
-        love.graphics.circle("fill", self.x, self.y, self.radius + 5)
+        love.graphics.circle("fill", self.x, self.y + bobOffset, self.radius + 5)
         bodyColor = {
             math.min(1, bodyColor[1] + 0.3),
             bodyColor[2] * 0.7,

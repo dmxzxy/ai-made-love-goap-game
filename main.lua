@@ -4,6 +4,10 @@ local Base = require("entities.base")
 local Resource = require("entities.resource")
 local Barracks = require("entities.barracks")
 local Tower = require("entities.tower")
+local Particles = require("effects.particles")
+local DamageNumbers = require("effects.damage_numbers")
+local Minimap = require("ui.minimap")
+local BattleNotifications = require("ui.battle_notifications")
 
 -- 全局变量
 local redTeam = {}
@@ -57,7 +61,10 @@ local camera = {
     dragStartX = 0,
     dragStartY = 0,
     dragStartCamX = 0,
-    dragStartCamY = 0
+    dragStartCamY = 0,
+    shakeX = 0,      -- 屏幕震动X偏移
+    shakeY = 0,      -- 屏幕震动Y偏移
+    shakeIntensity = 0  -- 震动强度
 }
 
 function love.load()
@@ -153,6 +160,16 @@ function love.load()
     end
     
     print("=== Game Loaded ===")
+    
+    -- 初始化特效系统
+    Particles.init()
+    DamageNumbers.init()
+    BattleNotifications.init()
+    
+    -- 让BattleNotifications全局可访问（供其他模块调用）
+    _G.BattleNotifications = BattleNotifications
+    
+    print("Visual effects systems initialized")
 
 end
 
@@ -161,6 +178,23 @@ function love.update(dt)
     
     if gameOver then
         return
+    end
+    
+    -- 更新特效系统
+    Particles.update(dt)
+    DamageNumbers.update(dt)
+    BattleNotifications.update(dt)
+    
+    -- 更新摄像机震动
+    if camera.shakeIntensity > 0 then
+        camera.shakeX = (math.random() - 0.5) * camera.shakeIntensity
+        camera.shakeY = (math.random() - 0.5) * camera.shakeIntensity
+        camera.shakeIntensity = camera.shakeIntensity * 0.9  -- 衰减
+        if camera.shakeIntensity < 0.1 then
+            camera.shakeIntensity = 0
+            camera.shakeX = 0
+            camera.shakeY = 0
+        end
     end
     
     -- 更新资源点
@@ -316,13 +350,15 @@ function love.update(dt)
     end
     
     -- 检查游戏是否结束（基地被摧毁）
-    if redBase.isDead then
+    if redBase.isDead and not gameOver then
         gameOver = true
         winner = "Blue Team"
+        BattleNotifications.victory("blue")
         print(string.format("=== GAME OVER === Blue Team destroyed Red Base! Time: %.1fs", frameCount / 60))
-    elseif blueBase.isDead then
+    elseif blueBase.isDead and not gameOver then
         gameOver = true
         winner = "Red Team"
+        BattleNotifications.victory("red")
         print(string.format("=== GAME OVER === Red Team destroyed Blue Base! Time: %.1fs", frameCount / 60))
     end
     
@@ -335,18 +371,23 @@ end
 
 function love.draw()
     -- 背景
-    love.graphics.setBackgroundColor(0.1, 0.1, 0.15)
+    love.graphics.setBackgroundColor(0.08, 0.08, 0.12)
     
     -- 保存原始变换
     love.graphics.push()
     
-    -- 应用摄像机变换
-    love.graphics.translate(-camera.x, -camera.y)
+    -- 应用摄像机变换（包括震动）
+    love.graphics.translate(-camera.x + camera.shakeX, -camera.y + camera.shakeY)
     love.graphics.scale(camera.scale, camera.scale)
     
+    -- 绘制战场网格背景
+    drawBattlefieldGrid()
+    
     -- 绘制分隔线（居中）
-    love.graphics.setColor(0.3, 0.3, 0.3)
+    love.graphics.setColor(0.3, 0.3, 0.4, 0.6)
+    love.graphics.setLineWidth(3)
     love.graphics.line(1200, 0, 1200, 1200)
+    love.graphics.setLineWidth(1)
     
     -- 绘制标题
     love.graphics.setColor(1, 1, 1)
@@ -385,6 +426,12 @@ function love.draw()
     for _, agent in ipairs(blueTeam) do
         agent:draw()
     end
+    
+    -- 绘制粒子特效
+    Particles.draw()
+    
+    -- 绘制伤害数字
+    DamageNumbers.draw()
     
     -- 恢复变换（UI在摄像机之外绘制）
     love.graphics.pop()
@@ -694,6 +741,12 @@ function love.draw()
     love.graphics.setColor(0.85, 1, 0.9)
     love.graphics.print("R-Click+Drag=Move | Wheel=Zoom | L-Click=Select | R=Restart", 
         900, bottomBarY + 24, 0, 0.9, 0.9)
+    
+    -- 绘制小地图
+    Minimap.draw(redTeam, blueTeam, redBase, blueBase, resources, WORLD_WIDTH, WORLD_HEIGHT)
+    
+    -- 绘制战斗提示
+    BattleNotifications.draw()
     
     -- 如果游戏结束，显示胜利者（现代设计）
     if gameOver then
@@ -1268,6 +1321,17 @@ function love.mousepressed(x, y, button)
     end
     
     if button == 1 then  -- 左键点击
+        -- 检查是否点击小地图（优先处理）
+        if Minimap.isMouseOver(x, y) then
+            local worldX, worldY = Minimap.minimapToWorld(x, y, WORLD_WIDTH, WORLD_HEIGHT)
+            if worldX and worldY then
+                -- 快速定位到点击位置（居中到屏幕）
+                camera.x = worldX * camera.scale - 800
+                camera.y = worldY * camera.scale - 450
+                return
+            end
+        end
+        
         -- 将屏幕坐标转换为世界坐标
         local worldX = (x + camera.x) / camera.scale
         local worldY = (y + camera.y) / camera.scale
@@ -1405,4 +1469,38 @@ function love.wheelmoved(x, y)
     -- 调整摄像机位置以保持鼠标位置下的世界坐标不变
     camera.x = worldX * camera.scale - mouseX
     camera.y = worldY * camera.scale - mouseY
+end
+
+-- 绘制战场网格
+function drawBattlefieldGrid()
+    love.graphics.setColor(0.15, 0.15, 0.22, 0.4)
+    love.graphics.setLineWidth(1)
+    
+    -- 垂直线
+    for x = 0, WORLD_WIDTH, 100 do
+        love.graphics.line(x, 0, x, WORLD_HEIGHT)
+    end
+    
+    -- 水平线
+    for y = 0, WORLD_HEIGHT, 100 do
+        love.graphics.line(0, y, WORLD_WIDTH, y)
+    end
+    
+    -- 加粗中线
+    love.graphics.setColor(0.25, 0.25, 0.35, 0.6)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(WORLD_WIDTH / 2, 0, WORLD_WIDTH / 2, WORLD_HEIGHT)
+    
+    -- 区域装饰
+    love.graphics.setColor(1, 0.2, 0.2, 0.05)
+    love.graphics.rectangle("fill", 0, 0, WORLD_WIDTH / 3, WORLD_HEIGHT)
+    love.graphics.setColor(0.2, 0.2, 1, 0.05)
+    love.graphics.rectangle("fill", WORLD_WIDTH * 2/3, 0, WORLD_WIDTH / 3, WORLD_HEIGHT)
+    
+    love.graphics.setLineWidth(1)
+end
+
+-- 摄像机震动效果
+function addCameraShake(intensity)
+    camera.shakeIntensity = math.max(camera.shakeIntensity, intensity)
 end

@@ -242,9 +242,19 @@ end
 function Tower:attack(target, enemies)
     self.muzzleFlash = 1  -- 触发枪口闪光
     
+    -- 加载特效系统
+    local Particles = require("effects.particles")
+    
     if self.towerType == "Cannon" then
         -- 炮塔：强化溅射伤害
         self:dealDamage(target, self.damage)
+        
+        -- 炮弹轨迹特效
+        Particles.createBulletTrail(self.x, self.y, target.x, target.y, {1, 0.6, 0.2})
+        
+        -- 爆炸特效
+        Particles.createExplosion(target.x, target.y, {1, 0.5, 0.1}, 1.5)
+        addCameraShake(4)
         
         -- 更大范围的溅射伤害
         local splashCount = 0
@@ -264,7 +274,7 @@ function Tower:attack(target, enemies)
         
         self.shootEffect = {x = target.x, y = target.y, time = 0, type = "explosion"}
         
-        -- 创建爆炸粒子
+        -- 创建爆炸粒子（保留原有系统）
         for i = 1, 15 do
             local angle = math.random() * math.pi * 2
             local speed = 50 + math.random() * 100
@@ -286,9 +296,16 @@ function Tower:attack(target, enemies)
         self.laserTarget = target
         self.laserTime = 0
         
+        -- 激光束特效
+        Particles.createLaserBeam(self.x, self.y, target.x, target.y, {0.3, 0.8, 1})
+        
     elseif self.towerType == "Frost" then
         -- 冰冻塔：增强减速效果
         self:dealDamage(target, self.damage)
+        
+        -- 冰冻轨迹
+        Particles.createBulletTrail(self.x, self.y, target.x, target.y, {0.5, 0.8, 1})
+        Particles.createEnergyPulse(target.x, target.y, {0.5, 0.9, 1}, 3)
         
         -- 应用更强的减速效果
         if not target.slowedUntil or target.slowedUntil < love.timer.getTime() then
@@ -300,7 +317,7 @@ function Tower:attack(target, enemies)
         
         self.shootEffect = {x = target.x, y = target.y, time = 0, type = "frost"}
         
-        -- 创建冰霜粒子
+        -- 创建冰霜粒子（保留原有系统）
         for i = 1, 8 do
             local angle = math.random() * math.pi * 2
             local speed = 30 + math.random() * 50
@@ -321,6 +338,10 @@ function Tower:attack(target, enemies)
         -- 箭塔：快速攻击
         self:dealDamage(target, self.damage)
         self.shootEffect = {x = target.x, y = target.y, time = 0, type = "arrow"}
+        
+        -- 箭矢特效
+        Particles.createBulletTrail(self.x, self.y, target.x, target.y, {0.8, 0.6, 0.3})
+        Particles.createSparks(target.x, target.y, {1, 0.8, 0.4}, 4)
         
         -- 创建箭矢轨迹粒子
         for i = 1, 3 do
