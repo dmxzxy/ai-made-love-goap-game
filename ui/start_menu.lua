@@ -257,10 +257,10 @@ function StartMenu.drawPreparation()
     love.graphics.setColor(0.7, 0.8, 0.9)
     love.graphics.printf(string.format("%d Teams Battle Royale", StartMenu.selectedTeamCount), 0, 110, printWidth, "center", 0, scale, scale)
     
-    -- 计算布局（一行排列）
-    local cardWidth = 320
-    local cardHeight = 420
-    local spacing = 30
+    -- 计算布局（横向一行排列）
+    local cardWidth = 300
+    local cardHeight = 400
+    local spacing = 35
     local totalWidth = cardWidth * StartMenu.selectedTeamCount + spacing * (StartMenu.selectedTeamCount - 1)
     local startX = (1600 - totalWidth) / 2
     local startY = 200
@@ -272,7 +272,7 @@ function StartMenu.drawPreparation()
         end
     end
     
-    -- 绘制队伍卡片（横向排列）
+    -- 绘制队伍卡片（横向一行排列）
     for i = 1, StartMenu.selectedTeamCount do
         local config = TEAM_CONFIGS[i]
         local commander = StartMenu.teamCommanders[i]

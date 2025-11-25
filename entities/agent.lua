@@ -471,9 +471,7 @@ function Agent:handleCollisions(dt)
         end
     end
     
-    -- 边界限制（适配新地图大小 3200x1800）
-    self.x = math.max(self.radius, math.min(3200 - self.radius, self.x))
-    self.y = math.max(self.radius, math.min(1800 - self.radius, self.y))
+    -- 无边界限制 - 单位可以移动到任何位置
 end
 
 function Agent:updateWorldState()

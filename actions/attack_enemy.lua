@@ -118,6 +118,19 @@ function AttackEnemy:perform(agent, dt)
     local actualDamage = agent.target:takeDamage(finalDamage, isCrit, agent)  -- 传递攻击者
     self.attackCooldown = agent.attackSpeed
     
+    -- 增加仇恨值（当对敌人或基地造成伤害时）
+    if actualDamage > 0 and agent.target.team and agent.team then
+        if _G.addHatred then
+            local hatredAmount = actualDamage * 0.5  -- 每点伤害产生0.5点仇恨
+            if agent.target.towerType then
+                hatredAmount = hatredAmount * 1.5  -- 攻击建筑产生更多仇恨
+            elseif agent.target == agent.enemyBase or agent.target.isBase then
+                hatredAmount = hatredAmount * 3  -- 攻击基地产生大量仇恨
+            end
+            _G.addHatred(agent.team, agent.target.team, hatredAmount)
+        end
+    end
+    
     -- 克制提示
     if counterMultiplier > 1.0 and actualDamage > 0 then
         agent:addDamageNumber(string.format("克制! x%.1f", counterMultiplier), {1, 0.8, 0}, false)

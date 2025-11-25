@@ -14,17 +14,48 @@ local config = {
     gridColor = {0.15, 0.15, 0.25, 0.4}
 }
 
--- 世界坐标到小地图坐标的转换
-local function worldToMinimap(worldX, worldY, worldWidth, worldHeight)
+-- 世界坐标到小地图坐标的转换（支持动态边界）
+local function worldToMinimap(worldX, worldY, worldBounds)
+    -- worldBounds 可以是表 {minX, minY, width, height} 或者两个数字 (width, height)
+    local minX, minY, worldWidth, worldHeight
+    
+    if type(worldBounds) == "table" then
+        -- 新格式：动态边界
+        minX = worldBounds.minX or 0
+        minY = worldBounds.minY or 0
+        worldWidth = worldBounds.width
+        worldHeight = worldBounds.height
+    else
+        -- 旧格式：兼容性支持 (worldWidth, worldHeight)
+        minX, minY = 0, 0
+        worldWidth = worldBounds
+        worldHeight = worldY
+        worldY = worldX
+        worldX = minX
+    end
+    
     local scaleX = config.width / worldWidth
     local scaleY = config.height / worldHeight
     return 
-        config.x + worldX * scaleX,
-        config.y + worldY * scaleY
+        config.x + (worldX - minX) * scaleX,
+        config.y + (worldY - minY) * scaleY
 end
 
 -- 绘制小地图
-function Minimap.draw(teams, teamCount, teamConfigs, resources, worldWidth, worldHeight)
+function Minimap.draw(teams, teamCount, teamConfigs, resources, worldBounds)
+    -- 兼容旧调用方式：如果传入的是两个数字，转换为边界表
+    local bounds
+    if type(worldBounds) == "table" then
+        bounds = worldBounds
+    else
+        -- 旧格式：Minimap.draw(..., worldWidth, worldHeight)
+        local worldHeight = resources  -- 参数错位了
+        bounds = {minX = 0, minY = 0, width = worldBounds, height = worldHeight}
+        resources = teamConfigs
+        teamConfigs = teamCount
+        teamCount = teams
+        teams = teams
+    end
     -- 背景
     love.graphics.setColor(config.backgroundColor)
     love.graphics.rectangle("fill", config.x, config.y, config.width, config.height, 5, 5)
@@ -53,7 +84,7 @@ function Minimap.draw(teams, teamCount, teamConfigs, resources, worldWidth, worl
     if resources then
         for _, resource in ipairs(resources) do
             if resource and resource.amount and resource.amount > 0 then
-                local x, y = worldToMinimap(resource.x, resource.y, worldWidth, worldHeight)
+                local x, y = worldToMinimap(resource.x, resource.y, bounds)
                 local alpha = math.min(1, resource.amount / 500)
                 love.graphics.setColor(1, 0.9, 0.2, alpha * 0.8)
                 love.graphics.circle("fill", x, y, 3)
@@ -76,7 +107,7 @@ function Minimap.draw(teams, teamCount, teamConfigs, resources, worldWidth, worl
             
             -- 绘制基地
             if base and not base.isDead then
-                local x, y = worldToMinimap(base.x, base.y, worldWidth, worldHeight)
+                local x, y = worldToMinimap(base.x, base.y, bounds)
                 local healthRatio = base.health / base.maxHealth
                 love.graphics.setColor(color[1], color[2], color[3], 0.9)
                 love.graphics.circle("fill", x, y, 6)
@@ -92,7 +123,7 @@ function Minimap.draw(teams, teamCount, teamConfigs, resources, worldWidth, worl
             if base.towers then
                 for _, tower in ipairs(base.towers) do
                     if not tower.isDead then
-                        local x, y = worldToMinimap(tower.x, tower.y, worldWidth, worldHeight)
+                        local x, y = worldToMinimap(tower.x, tower.y, bounds)
                         love.graphics.setColor(color[1], color[2], color[3], 0.6)
                         love.graphics.rectangle("fill", x - 2, y - 2, 4, 4)
                     end
@@ -102,7 +133,7 @@ function Minimap.draw(teams, teamCount, teamConfigs, resources, worldWidth, worl
             -- 绘制兵营
             if base.barracks then
                 for _, barracks in ipairs(base.barracks) do
-                    local x, y = worldToMinimap(barracks.x, barracks.y, worldWidth, worldHeight)
+                    local x, y = worldToMinimap(barracks.x, barracks.y, bounds)
                     love.graphics.setColor(color[1] * 1.2, color[2] * 1.2, color[3] * 1.2, 0.5)
                     love.graphics.rectangle("fill", x - 1.5, y - 1.5, 3, 3)
                 end
@@ -113,7 +144,7 @@ function Minimap.draw(teams, teamCount, teamConfigs, resources, worldWidth, worl
             if teamData.units then
                 for _, agent in ipairs(teamData.units) do
                     if not agent.isDead then
-                        local x, y = worldToMinimap(agent.x, agent.y, worldWidth, worldHeight)
+                        local x, y = worldToMinimap(agent.x, agent.y, bounds)
                         love.graphics.setColor(color[1], color[2], color[3], 0.7)
                         love.graphics.circle("fill", x, y, 1.5)
                         unitCount = unitCount + 1
@@ -153,15 +184,28 @@ function Minimap.isMouseOver(mouseX, mouseY)
 end
 
 -- 小地图点击转世界坐标（用于快速定位）
-function Minimap.minimapToWorld(mouseX, mouseY, worldWidth, worldHeight)
+function Minimap.minimapToWorld(mouseX, mouseY, worldBounds)
     if not Minimap.isMouseOver(mouseX, mouseY) then
         return nil, nil
+    end
+    
+    -- 支持新旧格式
+    local minX, minY, worldWidth, worldHeight
+    if type(worldBounds) == "table" then
+        minX = worldBounds.minX or 0
+        minY = worldBounds.minY or 0
+        worldWidth = worldBounds.width
+        worldHeight = worldBounds.height
+    else
+        minX, minY = 0, 0
+        worldWidth = worldBounds
+        worldHeight = mouseY  -- 旧格式参数
     end
     
     local relX = (mouseX - config.x) / config.width
     local relY = (mouseY - config.y) / config.height
     
-    return relX * worldWidth, relY * worldHeight
+    return minX + relX * worldWidth, minY + relY * worldHeight
 end
 
 return Minimap

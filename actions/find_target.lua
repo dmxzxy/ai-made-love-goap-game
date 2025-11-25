@@ -86,51 +86,64 @@ function FindTarget:perform(agent, dt)
         end
     end
     
-    -- 评估基地（最低优先级，只有在没有更好目标时）
-    if agent.enemyBase and not agent.enemyBase.isDead then
-        local dx = agent.enemyBase.x - agent.x
-        local dy = agent.enemyBase.y - agent.y
-        local distance = math.sqrt(dx * dx + dy * dy)
-        
-        -- 基地分数极低
-        local score = 100 / (distance + 100)
-        
-        -- 检查附近是否有威胁
-        local hasNearbyThreats = false
-        for _, enemy in ipairs(agent.enemies) do
-            if enemy.health > 0 and not enemy.isDead then
-                local ex = enemy.x - agent.x
-                local ey = enemy.y - agent.y
-                if math.sqrt(ex * ex + ey * ey) < 400 then
-                    hasNearbyThreats = true
-                    break
-                end
-            end
-        end
-        
-        if not hasNearbyThreats and agent.enemyTowers then
-            for _, tower in ipairs(agent.enemyTowers) do
-                if not tower.isDead and tower.health > 0 then
-                    local tx = tower.x - agent.x
-                    local ty = tower.y - agent.y
-                    if math.sqrt(tx * tx + ty * ty) < 400 then
-                        hasNearbyThreats = true
-                        break
+    -- 评估所有敌方基地（最低优先级，只有在没有更好目标时）
+    if agent.enemyBases then
+        for _, enemyBase in ipairs(agent.enemyBases) do
+            if enemyBase and not enemyBase.isDead then
+                local dx = enemyBase.x - agent.x
+                local dy = enemyBase.y - agent.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                
+                -- 基地分数极低
+                local score = 100 / (distance + 100)
+                
+                -- 检查附近是否有威胁
+                local hasNearbyThreats = false
+                for _, enemy in ipairs(agent.enemies) do
+                    if enemy.health > 0 and not enemy.isDead then
+                        local ex = enemy.x - agent.x
+                        local ey = enemy.y - agent.y
+                        if math.sqrt(ex * ex + ey * ey) < 400 then
+                            hasNearbyThreats = true
+                            break
+                        end
                     end
                 end
+                
+                if not hasNearbyThreats and agent.enemyTowers then
+                    for _, tower in ipairs(agent.enemyTowers) do
+                        if not tower.isDead and tower.health > 0 then
+                            local tx = tower.x - agent.x
+                            local ty = tower.y - agent.y
+                            if math.sqrt(tx * tx + ty * ty) < 400 then
+                                hasNearbyThreats = true
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                -- 只有在没有威胁时才考虑攻击基地
+                if not hasNearbyThreats then
+                    score = score + 50
+                else
+                    score = score * 0.2  -- 有威胁时分数极低
+                end
+                
+                -- 仇恨值加成：对仇恨高的队伍优先攻击
+                if _G.getHatred then
+                    local hatred = _G.getHatred(agent.team, enemyBase.team)
+                    score = score + hatred * 0.5  -- 仇恨值每100点增加50分
+                end
+                
+                -- 添加随机因素，避免所有单位都攻击同一个基地
+                score = score + math.random() * 20
+                
+                if score > bestScore then
+                    bestScore = score
+                    bestTarget = enemyBase
+                end
             end
-        end
-        
-        -- 只有在没有威胁时才考虑攻击基地
-        if not hasNearbyThreats then
-            score = score + 50
-        else
-            score = score * 0.2  -- 有威胁时分数极低
-        end
-        
-        if score > bestScore then
-            bestScore = score
-            bestTarget = agent.enemyBase
         end
     end
     

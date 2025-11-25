@@ -118,15 +118,37 @@ function startGame()
         }
     end
     
-    -- 计算基地位置（四个角落，扩大距离）
+    -- 计算基地位置（根据队伍数量）
     -- 中心点：(1600, 900)
-    -- 让所有基地到中心的距离相等，阵营间距离更大
-    local basePositions = {
-        {x = 250, y = 250},      -- 左上角（红队）
-        {x = 2950, y = 250},     -- 右上角（蓝队）
-        {x = 250, y = 1550},     -- 左下角（绿队）
-        {x = 2950, y = 1550}     -- 右下角（黄队）
-    }
+    local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
+    local basePositions = {}
+    
+    if TEAM_COUNT == 4 then
+        -- 4队：十字形分布（上、右、下、左），到中心距离相等
+        local distanceFromCenter = 1200  -- 统一距离（扩大）
+        basePositions = {
+            {x = centerX, y = centerY - distanceFromCenter},  -- 上方（红队）
+            {x = centerX + distanceFromCenter, y = centerY},  -- 右方（蓝队）2250, 900
+            {x = centerX, y = centerY + distanceFromCenter},  -- 下方（绿队）1600, 1550
+            {x = centerX - distanceFromCenter, y = centerY}   -- 左方（黄队）950, 900
+        }
+    elseif TEAM_COUNT == 3 then
+        -- 3队：三角形分布，到中心距离相等
+        local distanceFromCenter = 1200  -- 统一距离（扩大）
+        local angle120 = math.pi * 2 / 3  -- 120度
+        basePositions = {
+            {x = centerX, y = centerY - distanceFromCenter},  -- 上方（红队）
+            {x = centerX + distanceFromCenter * math.sin(angle120), y = centerY + distanceFromCenter * math.cos(angle120)},  -- 右下（蓝队）
+            {x = centerX - distanceFromCenter * math.sin(angle120), y = centerY + distanceFromCenter * math.cos(angle120)}   -- 左下（绿队）
+        }
+    else
+        -- 2队：左右对称，到中心距离相等
+        local distanceFromCenter = 1200  -- 统一距离（扩大）
+        basePositions = {
+            {x = centerX - distanceFromCenter, y = centerY},  -- 左方（红队）
+            {x = centerX + distanceFromCenter, y = centerY}   -- 右方（蓝队）
+        }
+    end
     
     -- 创建基地 - 使用准备界面分配的指挥官
     for i = 1, TEAM_COUNT do
@@ -226,69 +248,61 @@ function startGame()
         table.insert(resources, Resource.new(centerX - 300, centerY))
         table.insert(resources, Resource.new(centerX + 300, centerY))
     else
-        -- 4队模式：四角基地，资源围绕中心对称分布
+        -- 4队模式：十字形基地，资源完全对称公平分布
         local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2  -- 中心点 (1600, 900)
+        local distanceFromCenter = 1200  -- 基地到中心的距离（扩大）
+        local nearBaseDistance = 300    -- 近基地资源距离（扩大）
+        local midDistance = 500         -- 中距离资源（扩大）
         
-        -- 每个象限的近基地资源（离基地较近，增加数量）
-        -- 左上象限（红队附近）
-        table.insert(resources, Resource.new(450, 350))
-        table.insert(resources, Resource.new(350, 500))
-        table.insert(resources, Resource.new(650, 450))
-        table.insert(resources, Resource.new(550, 600))
-        table.insert(resources, Resource.new(300, 400))
+        -- 每个队伍获得完全相同的资源布局（相对于基地的位置）
+        -- 上方（红队 1600,250 附近）- 5个
+        table.insert(resources, Resource.new(centerX, centerY - distanceFromCenter + nearBaseDistance))  -- 基地前方
+        table.insert(resources, Resource.new(centerX - 150, centerY - distanceFromCenter + 150))  -- 左前
+        table.insert(resources, Resource.new(centerX + 150, centerY - distanceFromCenter + 150))  -- 右前
+        table.insert(resources, Resource.new(centerX - 100, centerY - distanceFromCenter + 280))  -- 左中
+        table.insert(resources, Resource.new(centerX + 100, centerY - distanceFromCenter + 280))  -- 右中
         
-        -- 右上象限（蓝队附近）
-        table.insert(resources, Resource.new(2750, 350))
-        table.insert(resources, Resource.new(2850, 500))
-        table.insert(resources, Resource.new(2550, 450))
-        table.insert(resources, Resource.new(2650, 600))
-        table.insert(resources, Resource.new(2900, 400))
+        -- 右方（蓝队 2250,900 附近）- 5个
+        table.insert(resources, Resource.new(centerX + distanceFromCenter - nearBaseDistance, centerY))  -- 基地前方
+        table.insert(resources, Resource.new(centerX + distanceFromCenter - 150, centerY - 150))  -- 上前
+        table.insert(resources, Resource.new(centerX + distanceFromCenter - 150, centerY + 150))  -- 下前
+        table.insert(resources, Resource.new(centerX + distanceFromCenter - 280, centerY - 100))  -- 上中
+        table.insert(resources, Resource.new(centerX + distanceFromCenter - 280, centerY + 100))  -- 下中
         
-        -- 左下象限（绿队附近）
-        table.insert(resources, Resource.new(450, 1450))
-        table.insert(resources, Resource.new(350, 1300))
-        table.insert(resources, Resource.new(650, 1350))
-        table.insert(resources, Resource.new(550, 1200))
-        table.insert(resources, Resource.new(300, 1400))
+        -- 下方（绿队 1600,1550 附近）- 5个
+        table.insert(resources, Resource.new(centerX, centerY + distanceFromCenter - nearBaseDistance))  -- 基地前方
+        table.insert(resources, Resource.new(centerX - 150, centerY + distanceFromCenter - 150))  -- 左前
+        table.insert(resources, Resource.new(centerX + 150, centerY + distanceFromCenter - 150))  -- 右前
+        table.insert(resources, Resource.new(centerX - 100, centerY + distanceFromCenter - 280))  -- 左中
+        table.insert(resources, Resource.new(centerX + 100, centerY + distanceFromCenter - 280))  -- 右中
         
-        -- 右下象限（黄队附近）
-        table.insert(resources, Resource.new(2750, 1450))
-        table.insert(resources, Resource.new(2850, 1300))
-        table.insert(resources, Resource.new(2550, 1350))
-        table.insert(resources, Resource.new(2650, 1200))
-        table.insert(resources, Resource.new(2900, 1400))
+        -- 左方（黄队 950,900 附近）- 5个
+        table.insert(resources, Resource.new(centerX - distanceFromCenter + nearBaseDistance, centerY))  -- 基地前方
+        table.insert(resources, Resource.new(centerX - distanceFromCenter + 150, centerY - 150))  -- 上前
+        table.insert(resources, Resource.new(centerX - distanceFromCenter + 150, centerY + 150))  -- 下前
+        table.insert(resources, Resource.new(centerX - distanceFromCenter + 280, centerY - 100))  -- 上中
+        table.insert(resources, Resource.new(centerX - distanceFromCenter + 280, centerY + 100))  -- 下中
         
-        -- 中心争夺区（围绕1600, 900对称分布，大幅增加密度）
-        -- 核心区域（最激烈战场）
+        -- 中心争夺区（核心战场）- 13个，完全对称
         table.insert(resources, Resource.new(centerX, centerY))  -- 正中心
-        table.insert(resources, Resource.new(centerX - 150, centerY))
-        table.insert(resources, Resource.new(centerX + 150, centerY))
-        table.insert(resources, Resource.new(centerX, centerY - 120))
-        table.insert(resources, Resource.new(centerX, centerY + 120))
-        table.insert(resources, Resource.new(centerX - 100, centerY - 80))
-        table.insert(resources, Resource.new(centerX + 100, centerY - 80))
-        table.insert(resources, Resource.new(centerX - 100, centerY + 80))
-        table.insert(resources, Resource.new(centerX + 100, centerY + 80))
         
-        -- 中环资源（扩大战场范围）
-        table.insert(resources, Resource.new(centerX - 250, centerY))
-        table.insert(resources, Resource.new(centerX + 250, centerY))
-        table.insert(resources, Resource.new(centerX, centerY - 200))
-        table.insert(resources, Resource.new(centerX, centerY + 200))
-        table.insert(resources, Resource.new(centerX - 180, centerY - 140))
-        table.insert(resources, Resource.new(centerX + 180, centerY - 140))
-        table.insert(resources, Resource.new(centerX - 180, centerY + 140))
-        table.insert(resources, Resource.new(centerX + 180, centerY + 140))
+        -- 内圈（十字形，4个）
+        table.insert(resources, Resource.new(centerX, centerY - 120))      -- 上
+        table.insert(resources, Resource.new(centerX + 120, centerY))      -- 右
+        table.insert(resources, Resource.new(centerX, centerY + 120))      -- 下
+        table.insert(resources, Resource.new(centerX - 120, centerY))      -- 左
         
-        -- 外环资源（连接各阵营到中心的通道）
-        table.insert(resources, Resource.new(centerX - 350, centerY))
-        table.insert(resources, Resource.new(centerX + 350, centerY))
-        table.insert(resources, Resource.new(centerX, centerY - 280))
-        table.insert(resources, Resource.new(centerX, centerY + 280))
-        table.insert(resources, Resource.new(centerX - 250, centerY - 200))
-        table.insert(resources, Resource.new(centerX + 250, centerY - 200))
-        table.insert(resources, Resource.new(centerX - 250, centerY + 200))
-        table.insert(resources, Resource.new(centerX + 250, centerY + 200))
+        -- 外圈（十字形，4个）
+        table.insert(resources, Resource.new(centerX, centerY - 240))      -- 上
+        table.insert(resources, Resource.new(centerX + 240, centerY))      -- 右
+        table.insert(resources, Resource.new(centerX, centerY + 240))      -- 下
+        table.insert(resources, Resource.new(centerX - 240, centerY))      -- 左
+        
+        -- 对角线（4个）
+        table.insert(resources, Resource.new(centerX - 85, centerY - 85))  -- 左上
+        table.insert(resources, Resource.new(centerX + 85, centerY - 85))  -- 右上
+        table.insert(resources, Resource.new(centerX + 85, centerY + 85))  -- 右下
+        table.insert(resources, Resource.new(centerX - 85, centerY + 85))  -- 左下
     end
     print(string.format("Created %d resource points for %d teams", #resources, TEAM_COUNT))
     
@@ -357,14 +371,28 @@ function startGame()
                 end
             end
             
-            -- 为兼容性设置enemyBase（选择最近的敌方基地）
+            -- 为兼容性设置enemyBase（随机选择一个敌方基地，避免总是攻击同一队伍）
             if #agent.enemyBases > 0 then
-                agent.enemyBase = agent.enemyBases[1]
+                local randomIndex = math.random(1, #agent.enemyBases)
+                agent.enemyBase = agent.enemyBases[randomIndex]
             end
         end
     end
     
     print("=== Game Loaded ===")
+    
+    -- 初始化仇恨系统（每个队伍对其他队伍的仇恨值）
+    _G.teamHatred = {}
+    for i = 1, TEAM_COUNT do
+        local teamName = TEAM_CONFIGS[i].name
+        teamHatred[teamName] = {}
+        for j = 1, TEAM_COUNT do
+            if i ~= j then
+                local otherName = TEAM_CONFIGS[j].name
+                teamHatred[teamName][otherName] = 0  -- 初始仇恨值为0
+            end
+        end
+    end
     
     -- 初始化特效系统
     Particles.init()
@@ -376,6 +404,43 @@ function startGame()
     
     print("Visual effects systems initialized")
 
+end
+
+-- 增加仇恨值（当一个队伍攻击另一个队伍时）
+function addHatred(attackerTeam, victimTeam, amount)
+    if not _G.teamHatred then return end
+    if not _G.teamHatred[victimTeam] then return end
+    if not _G.teamHatred[victimTeam][attackerTeam] then return end
+    
+    -- 受害者对攻击者的仇恨增加
+    _G.teamHatred[victimTeam][attackerTeam] = _G.teamHatred[victimTeam][attackerTeam] + amount
+    
+    -- 仇恨值上限
+    if _G.teamHatred[victimTeam][attackerTeam] > 1000 then
+        _G.teamHatred[victimTeam][attackerTeam] = 1000
+    end
+end
+
+-- 获取对某个队伍的仇恨值
+function getHatred(myTeam, targetTeam)
+    if not _G.teamHatred then return 0 end
+    if not _G.teamHatred[myTeam] then return 0 end
+    if not _G.teamHatred[myTeam][targetTeam] then return 0 end
+    return _G.teamHatred[myTeam][targetTeam]
+end
+
+-- 仇恨值衰减（每秒）
+function decayHatred(dt)
+    if not _G.teamHatred then return end
+    
+    local decayRate = 2 * dt  -- 每秒衰减2点
+    for teamName, hatredMap in pairs(_G.teamHatred) do
+        for targetTeam, value in pairs(hatredMap) do
+            if value > 0 then
+                hatredMap[targetTeam] = math.max(0, value - decayRate)
+            end
+        end
+    end
 end
 
 -- 辅助函数：统计队伍单位
@@ -570,7 +635,9 @@ local function updateTeam(teamName, dt, Barracks, Tower)
                 end
             end
             if #agent.enemyBases > 0 then
-                agent.enemyBase = agent.enemyBases[1]
+                -- 随机选择一个敌方基地作为初始目标，避免总是攻击同一队伍
+                local randomIndex = math.random(1, #agent.enemyBases)
+                agent.enemyBase = agent.enemyBases[randomIndex]
             end
             
             table.insert(units, agent)
@@ -603,6 +670,9 @@ function love.update(dt)
     Particles.update(dt)
     DamageNumbers.update(dt)
     BattleNotifications.update(dt)
+    
+    -- 仇恨值衰减
+    decayHatred(dt)
     
     -- 更新摄像机震动
     if camera.shakeIntensity > 0 then
@@ -696,18 +766,8 @@ function love.draw()
     love.graphics.translate(-camera.x + camera.shakeX, -camera.y + camera.shakeY)
     love.graphics.scale(camera.scale, camera.scale)
     
-    -- 绘制战场网格背景
-    drawBattlefieldGrid()
-    
-    -- 绘制分隔线（居中）
-    love.graphics.setColor(0.3, 0.3, 0.4, 0.6)
-    love.graphics.setLineWidth(3)
-    love.graphics.line(1200, 0, 1200, 1200)
-    love.graphics.setLineWidth(1)
-    
-    -- 绘制标题
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.print("GOAP Battle - Multi-Team Warfare", 20, 20, 0, 2, 2)
+    -- 绘制战场网格背景（传递摄像机信息）
+    drawBattlefieldGrid(camera)
     
     -- 绘制所有队伍的基地、兵营、防御塔
     for i = 1, TEAM_COUNT do
@@ -971,7 +1031,36 @@ function love.draw()
     
     -- 绘制小地图（带开关）
     if showMinimap then
-        Minimap.draw(teams, TEAM_COUNT, TEAM_CONFIGS, resources, WORLD_WIDTH, WORLD_HEIGHT)
+        -- 计算实际使用的世界边界（基于基地位置）
+        local minX, maxX = math.huge, -math.huge
+        local minY, maxY = math.huge, -math.huge
+        
+        for i = 1, TEAM_COUNT do
+            local teamName = TEAM_CONFIGS[i].name
+            local teamData = teams[teamName]
+            if teamData and teamData.base then
+                local base = teamData.base
+                minX = math.min(minX, base.x - 500)
+                maxX = math.max(maxX, base.x + 500)
+                minY = math.min(minY, base.y - 500)
+                maxY = math.max(maxY, base.y + 500)
+            end
+        end
+        
+        -- 如果没有找到基地，使用默认值
+        if minX == math.huge then
+            minX, maxX = 0, WORLD_WIDTH
+            minY, maxY = 0, WORLD_HEIGHT
+        end
+        
+        local worldBounds = {
+            minX = minX,
+            minY = minY,
+            width = maxX - minX,
+            height = maxY - minY
+        }
+        
+        Minimap.draw(teams, TEAM_COUNT, TEAM_CONFIGS, resources, worldBounds)
     else
         -- 显示小地图关闭提示（左侧位置）
         love.graphics.setColor(0.3, 0.3, 0.3, 0.6)
@@ -1704,9 +1793,7 @@ function tryBuildSpecialBuilding(base, buildingType)
         local x = base.x + math.cos(angle) * distance
         local y = base.y + math.sin(angle) * distance
         
-        -- Clamp to world bounds
-        x = math.max(50, math.min(WORLD_WIDTH - 50, x))
-        y = math.max(50, math.min(WORLD_HEIGHT - 50, y))
+        -- 建筑可以放置在任何位置（无边界限制）
         
         -- Create the building
         local building = SpecialBuilding.new(x, y, base.team, buildingType)
@@ -1753,11 +1840,39 @@ function love.mousepressed(x, y, button)
     if button == 1 then  -- 左键点击
         -- 检查是否点击小地图（优先处理）
         if Minimap.isMouseOver(x, y) then
-            local worldX, worldY = Minimap.minimapToWorld(x, y, WORLD_WIDTH, WORLD_HEIGHT)
+            -- 计算世界边界（与绘制时相同）
+            local minX, maxX = math.huge, -math.huge
+            local minY, maxY = math.huge, -math.huge
+            
+            for i = 1, TEAM_COUNT do
+                local teamName = TEAM_CONFIGS[i].name
+                local teamData = teams[teamName]
+                if teamData and teamData.base then
+                    local base = teamData.base
+                    minX = math.min(minX, base.x - 500)
+                    maxX = math.max(maxX, base.x + 500)
+                    minY = math.min(minY, base.y - 500)
+                    maxY = math.max(maxY, base.y + 500)
+                end
+            end
+            
+            if minX == math.huge then
+                minX, maxX = 0, WORLD_WIDTH
+                minY, maxY = 0, WORLD_HEIGHT
+            end
+            
+            local worldBounds = {
+                minX = minX,
+                minY = minY,
+                width = maxX - minX,
+                height = maxY - minY
+            }
+            
+            local worldX, worldY = Minimap.minimapToWorld(x, y, worldBounds)
             if worldX and worldY then
                 -- 快速定位到点击位置（居中到屏幕）
-                camera.x = worldX * camera.scale - 800
-                camera.y = worldY * camera.scale - 450
+                camera.x = worldX
+                camera.y = worldY
                 return
             end
         end
@@ -1901,30 +2016,55 @@ function love.wheelmoved(x, y)
 end
 
 -- 绘制战场网格
-function drawBattlefieldGrid()
-    love.graphics.setColor(0.15, 0.15, 0.22, 0.4)
+function drawBattlefieldGrid(cam)
+    -- 简洁网格背景（扩大范围，无边界限制）
+    love.graphics.setColor(0.15, 0.15, 0.22, 0.3)
     love.graphics.setLineWidth(1)
     
+    -- 屏幕尺寸
+    local screenWidth = 1600
+    local screenHeight = 900
+    
+    -- 摄像机变换: translate(-cam.x, -cam.y) 然后 scale(cam.scale)
+    -- 世界坐标 (wx, wy) 变换到屏幕坐标: sx = (wx - cam.x) * cam.scale
+    -- 反过来，屏幕坐标 (0, 0) 对应世界坐标: wx = cam.x / cam.scale
+    
+    -- 但实际上，translate 是先执行的，所以：
+    -- 屏幕 (0, 0) -> 变换前 (cam.x, cam.y) -> 缩放后 (cam.x/scale, cam.y/scale)
+    -- 不对！让我重新理解...
+    
+    -- 正确理解：translate(-cam.x) + scale(s) 的组合效果是：
+    -- 世界坐标 (wx, wy) -> 屏幕坐标 (sx, sy) = ((wx - cam.x) * scale, (wy - cam.y) * scale)
+    -- 反过来：屏幕 (sx, sy) -> 世界 (wx, wy) = (sx / scale + cam.x, sy / scale + cam.y)
+    
+    -- 但这里已经在变换之后了，我们需要直接计算世界坐标范围
+    -- 屏幕左上角 (0, 0) 对应的世界坐标
+    local worldLeft = cam.x / cam.scale
+    local worldTop = cam.y / cam.scale
+    -- 屏幕右下角 (1600, 900) 对应的世界坐标
+    local worldRight = (cam.x + screenWidth) / cam.scale
+    local worldBottom = (cam.y + screenHeight) / cam.scale
+    
+    -- 扩展边距
+    local margin = 500
+    worldLeft = worldLeft - margin
+    worldRight = worldRight + margin
+    worldTop = worldTop - margin
+    worldBottom = worldBottom + margin
+    
+    -- 计算网格起始点（对齐100的倍数）
+    local startX = math.floor(worldLeft / 100) * 100
+    local startY = math.floor(worldTop / 100) * 100
+    
     -- 垂直线
-    for x = 0, WORLD_WIDTH, 100 do
-        love.graphics.line(x, 0, x, WORLD_HEIGHT)
+    for x = startX, worldRight, 100 do
+        love.graphics.line(x, worldTop, x, worldBottom)
     end
     
     -- 水平线
-    for y = 0, WORLD_HEIGHT, 100 do
-        love.graphics.line(0, y, WORLD_WIDTH, y)
+    for y = startY, worldBottom, 100 do
+        love.graphics.line(worldLeft, y, worldRight, y)
     end
-    
-    -- 加粗中线
-    love.graphics.setColor(0.25, 0.25, 0.35, 0.6)
-    love.graphics.setLineWidth(2)
-    love.graphics.line(WORLD_WIDTH / 2, 0, WORLD_WIDTH / 2, WORLD_HEIGHT)
-    
-    -- 区域装饰
-    love.graphics.setColor(1, 0.2, 0.2, 0.05)
-    love.graphics.rectangle("fill", 0, 0, WORLD_WIDTH / 3, WORLD_HEIGHT)
-    love.graphics.setColor(0.2, 0.2, 1, 0.05)
-    love.graphics.rectangle("fill", WORLD_WIDTH * 2/3, 0, WORLD_WIDTH / 3, WORLD_HEIGHT)
     
     love.graphics.setLineWidth(1)
 end
