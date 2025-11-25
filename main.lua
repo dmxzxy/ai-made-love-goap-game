@@ -4,10 +4,13 @@ local Base = require("entities.base")
 local Resource = require("entities.resource")
 local Barracks = require("entities.barracks")
 local Tower = require("entities.tower")
+local SpecialBuilding = require("entities.special_building")
 local Particles = require("effects.particles")
 local DamageNumbers = require("effects.damage_numbers")
 local Minimap = require("ui.minimap")
 local BattleNotifications = require("ui.battle_notifications")
+local StartMenu = require("ui.start_menu")
+local Commander = require("systems.commander")
 
 -- 多方博弈配置
 local TEAM_COUNT = 4  -- 可以设置为 2, 3, 或 4
@@ -17,6 +20,9 @@ local TEAM_CONFIGS = {
     {name = "green", color = {0.2, 1, 0.2}, displayName = "GREEN"},
     {name = "yellow", color = {1, 1, 0.2}, displayName = "YELLOW"}
 }
+
+-- 游戏状态
+local gameStarted = false
 
 -- 全局变量（使用通用teams结构）
 local teams = {}  -- teams[teamName] = {units = {}, base = nil, stats = {}}
@@ -29,7 +35,9 @@ local selectedAgent = nil
 local selectedBase = nil
 local selectedBarracks = nil
 local selectedTower = nil
+local selectedSpecialBuilding = nil
 local showMinimap = true  -- 小地图显示开关
+local specialBuildings = {}  -- Special buildings list
 
 -- 兼容性别名（保持旧代码兼容）
 local redTeam, blueTeam, redBase, blueBase
@@ -78,12 +86,22 @@ function love.load()
     love.window.setTitle("GOAP Battle Game - Multi-Team Strategic Warfare")
     love.window.setMode(1600, 900)
     
+    -- 初始化开始菜单
+    StartMenu.init()
+    gameStarted = false
+end
+
+function startGame()
     -- 实际游戏世界更大（扩大地图）
     WORLD_WIDTH = 3200  -- 2400→3200
     WORLD_HEIGHT = 1800  -- 1200→1800
     
-    print("=== Game Loading ===")
+    -- 应用菜单选择
+    TEAM_COUNT = StartMenu.selectedTeamCount
+    
+    print("=== Game Starting ===")
     print(string.format("Team Count: %d", TEAM_COUNT))
+    print("Mode: SPECTATOR - All teams are AI-controlled")
     math.randomseed(tostring(os.time()):reverse():sub(1, 7))
 
     -- 初始化战斗统计
@@ -110,13 +128,23 @@ function love.load()
         {x = 2950, y = 1550}     -- 右下角（黄队）
     }
     
-    -- 创建基地
+    -- 创建基地 - 使用准备界面分配的指挥官
     for i = 1, TEAM_COUNT do
         local config = TEAM_CONFIGS[i]
         local pos = basePositions[i]
         local base = Base.new(pos.x, pos.y, config.name, config.color)
         teams[config.name].base = base
-        print(string.format("Base created: %s at (%.0f, %.0f)", config.displayName, pos.x, pos.y))
+        
+        -- 使用准备界面预先分配的指挥官
+        local commander = StartMenu.teamCommanders[i]
+        if not commander then
+            -- 如果没有预分配（不应该发生），随机选择
+            commander = Commander.selectRandomCommander()
+        end
+        Commander.applyToBase(base, commander)
+        base.commanderData = commander
+        print(string.format("%s Team at (%.0f, %.0f) with Commander: %s (%s)", 
+            config.displayName, pos.x, pos.y, commander.name, commander.title))
     end
     
     -- 设置兼容性别名
@@ -128,45 +156,75 @@ function love.load()
     -- 创建资源点（根据队伍数量动态分布）
     resources = {}
     if TEAM_COUNT == 2 then
-        -- 2队模式：左右分布
-        -- 左侧资源
-        for i = 1, 5 do
-            table.insert(resources, Resource.new(250 + math.random(-50, 50), 200 + i * 160))
-        end
-        -- 中央资源
-        for i = 1, 6 do
-            table.insert(resources, Resource.new(1200 + math.random(-200, 200), 200 + i * 160))
-        end
-        -- 右侧资源
-        for i = 1, 5 do
-            table.insert(resources, Resource.new(2150 + math.random(-50, 50), 200 + i * 160))
-        end
+        -- 2队模式：左右对称分布，确保公平
+        local centerX = WORLD_WIDTH / 2  -- 1600
+        
+        -- 左侧资源（红队附近）- 5个
+        table.insert(resources, Resource.new(450, 350))
+        table.insert(resources, Resource.new(350, 550))
+        table.insert(resources, Resource.new(550, 700))
+        table.insert(resources, Resource.new(350, 900))
+        table.insert(resources, Resource.new(500, 1100))
+        
+        -- 左中区域（偏红队）- 3个
+        table.insert(resources, Resource.new(900, 450))
+        table.insert(resources, Resource.new(850, 750))
+        table.insert(resources, Resource.new(900, 1050))
+        
+        -- 中央争夺区（完全居中）- 5个
+        table.insert(resources, Resource.new(centerX, 400))
+        table.insert(resources, Resource.new(centerX, 650))
+        table.insert(resources, Resource.new(centerX, 900))
+        table.insert(resources, Resource.new(centerX, 1150))
+        table.insert(resources, Resource.new(centerX, 1400))
+        
+        -- 右中区域（偏蓝队）- 3个
+        table.insert(resources, Resource.new(2300, 450))
+        table.insert(resources, Resource.new(2350, 750))
+        table.insert(resources, Resource.new(2300, 1050))
+        
+        -- 右侧资源（蓝队附近）- 5个
+        table.insert(resources, Resource.new(2750, 350))
+        table.insert(resources, Resource.new(2850, 550))
+        table.insert(resources, Resource.new(2650, 700))
+        table.insert(resources, Resource.new(2850, 900))
+        table.insert(resources, Resource.new(2700, 1100))
+        
     elseif TEAM_COUNT == 3 then
-        -- 3队模式：三角形布局（左上、右上、底部中间）
-        -- 左上区域（红队附近）
-        table.insert(resources, Resource.new(350, 300))
-        table.insert(resources, Resource.new(400, 450))
-        table.insert(resources, Resource.new(550, 350))
-        table.insert(resources, Resource.new(300, 600))
+        -- 3队模式：三角形平衡布局
+        local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2  -- 1600, 900
         
-        -- 右上区域（蓝队附近）
-        table.insert(resources, Resource.new(2050, 300))
-        table.insert(resources, Resource.new(2000, 450))
-        table.insert(resources, Resource.new(1850, 350))
-        table.insert(resources, Resource.new(2100, 600))
+        -- 左上区域（红队附近 250,250）- 5个
+        table.insert(resources, Resource.new(450, 350))
+        table.insert(resources, Resource.new(350, 500))
+        table.insert(resources, Resource.new(550, 450))
+        table.insert(resources, Resource.new(400, 650))
+        table.insert(resources, Resource.new(650, 600))
         
-        -- 底部中间区域（绿队附近）
-        table.insert(resources, Resource.new(1200, 900))
-        table.insert(resources, Resource.new(1000, 1000))
-        table.insert(resources, Resource.new(1400, 1000))
-        table.insert(resources, Resource.new(1200, 1050))
+        -- 右上区域（蓝队附近 2950,250）- 5个
+        table.insert(resources, Resource.new(2750, 350))
+        table.insert(resources, Resource.new(2850, 500))
+        table.insert(resources, Resource.new(2650, 450))
+        table.insert(resources, Resource.new(2800, 650))
+        table.insert(resources, Resource.new(2550, 600))
         
-        -- 中心争夺区
-        table.insert(resources, Resource.new(1200, 600))
-        table.insert(resources, Resource.new(1000, 550))
-        table.insert(resources, Resource.new(1400, 550))
-        table.insert(resources, Resource.new(900, 700))
-        table.insert(resources, Resource.new(1500, 700))
+        -- 左下区域（绿队附近 250,1550）- 5个
+        table.insert(resources, Resource.new(450, 1450))
+        table.insert(resources, Resource.new(350, 1300))
+        table.insert(resources, Resource.new(550, 1350))
+        table.insert(resources, Resource.new(400, 1150))
+        table.insert(resources, Resource.new(650, 1200))
+        
+        -- 中心争夺区（三角形中心，平衡分布）- 9个
+        table.insert(resources, Resource.new(centerX, centerY))  -- 正中心
+        table.insert(resources, Resource.new(centerX - 200, centerY - 100))
+        table.insert(resources, Resource.new(centerX + 200, centerY - 100))
+        table.insert(resources, Resource.new(centerX - 200, centerY + 100))
+        table.insert(resources, Resource.new(centerX + 200, centerY + 100))
+        table.insert(resources, Resource.new(centerX, centerY - 200))
+        table.insert(resources, Resource.new(centerX, centerY + 200))
+        table.insert(resources, Resource.new(centerX - 300, centerY))
+        table.insert(resources, Resource.new(centerX + 300, centerY))
     else
         -- 4队模式：四角基地，资源围绕中心对称分布
         local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2  -- 中心点 (1600, 900)
@@ -247,6 +305,11 @@ function love.load()
             local x, y = base:getSpawnPosition()
             y = y + (i - 3) * 50  -- 垂直分布
             local agent = Agent.new(x, y, config.name, config.color, "Miner")
+            
+            -- 应用指挥官加成
+            if base.commanderData then
+                Commander.applyToUnit(agent, base.commanderData)
+            end
             
             -- 设置朝向（朝向地图中心）
             local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
@@ -365,6 +428,11 @@ local function updateTeam(teamName, dt, Barracks, Tower)
         local x, y = base:getSpawnPosition()
         local agent = Agent.new(x, y, teamName, teamData.config.color, unitClass)
         
+        -- 应用指挥官加成
+        if base.commanderData then
+            Commander.applyToUnit(agent, base.commanderData)
+        end
+        
         -- 应用科技加成
         if base.techTree then
             local damageBonus = base.techTree:getTechBonus("damageBonus")
@@ -475,6 +543,11 @@ local function updateTeam(teamName, dt, Barracks, Tower)
             local x, y = barracks:getSpawnPosition()
             local agent = Agent.new(x, y, teamName, teamData.config.color, unitType)
             
+            -- 应用指挥官加成
+            if base.commanderData then
+                Commander.applyToUnit(agent, base.commanderData)
+            end
+            
             local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
             agent.angle = math.atan2(centerY - y, centerX - x)
             
@@ -514,6 +587,12 @@ local function updateTeam(teamName, dt, Barracks, Tower)
 end
 
 function love.update(dt)
+    -- 如果在开始菜单，只更新菜单
+    if not gameStarted then
+        StartMenu.update(dt)
+        return
+    end
+    
     frameCount = frameCount + 1
     
     if gameOver then
@@ -540,6 +619,24 @@ function love.update(dt)
     -- 更新资源点
     for _, resource in ipairs(resources) do
         resource:update(dt)
+    end
+    
+    -- 更新特殊建筑
+    for i = #specialBuildings, 1, -1 do
+        local building = specialBuildings[i]
+        building:update(dt)
+        
+        -- Remove dead buildings
+        if building.isDead then
+            table.remove(specialBuildings, i)
+        elseif building.isComplete then
+            -- Apply effects to team units
+            for _, teamData in pairs(teams) do
+                if teamData.units then
+                    building:applyEffects(teamData.units)
+                end
+            end
+        end
     end
     
     -- 更新所有队伍
@@ -585,6 +682,12 @@ end
 function love.draw()
     -- 背景
     love.graphics.setBackgroundColor(0.08, 0.08, 0.12)
+    
+    -- 如果在开始菜单，只绘制菜单
+    if not gameStarted then
+        StartMenu.draw()
+        return
+    end
     
     -- 保存原始变换
     love.graphics.push()
@@ -637,6 +740,11 @@ function love.draw()
         resource:draw()
     end
     
+    -- 绘制特殊建筑
+    for _, building in ipairs(specialBuildings) do
+        building:draw(camera.x / camera.scale, camera.y / camera.scale)
+    end
+    
     -- 绘制所有队伍的单位
     for i = 1, TEAM_COUNT do
         local teamName = TEAM_CONFIGS[i].name
@@ -679,14 +787,18 @@ function love.draw()
     love.graphics.setColor(0.8, 0.8, 0.95)
     love.graphics.print(string.format(" %d-TEAM", TEAM_COUNT), 88, 14, 0, 1.6, 1.6)
     
+    -- 观战模式标识
+    love.graphics.setColor(1, 1, 0.7, 0.8)
+    love.graphics.print("SPECTATOR MODE", 240, 18, 0, 1.1, 1.1)
+    
     -- 战斗时间（紧凑设计）
     love.graphics.setColor(0.3, 0.7, 0.3, 0.25)
-    love.graphics.circle("fill", 395, 28, 18)
+    love.graphics.circle("fill", 495, 28, 18)
     love.graphics.setColor(0.7, 0.95, 0.7)
-    love.graphics.print(string.format("%.1fs", frameCount / 60), 418, 18, 0, 1.2, 1.2)
+    love.graphics.print(string.format("%.1fs", frameCount / 60), 518, 18, 0, 1.2, 1.2)
     love.graphics.setColor(0.5, 0.9, 0.5, 0.8)
-    love.graphics.circle("line", 380, 28, 9)
-    love.graphics.circle("fill", 380, 28, 3)
+    love.graphics.circle("line", 480, 28, 9)
+    love.graphics.circle("fill", 480, 28, 3)
     
     -- 摄像机信息（右上角，缩小字号）
     love.graphics.setColor(0.15, 0.25, 0.4, 0.4)
@@ -1289,6 +1401,29 @@ function love.draw()
                 selectedBase.productionProgress * 100), infoX + 40, y, 0, 1.05, 1.05)
         end
         
+        -- 显示指挥官信息（如果有）
+        if selectedBase.commanderData then
+            y = y + lineHeight + 6
+            love.graphics.setColor(1, 0.9, 0.4)
+            love.graphics.print("COMMANDER BONUSES", infoX + 40, y, 0, 1.15, 1.15)
+            
+            y = y + lineHeight
+            love.graphics.setColor(1, 1, 0.8)
+            love.graphics.print(selectedBase.commanderData.name, infoX + 40, y, 0, 1.1, 1.1)
+            
+            y = y + lineHeight - 4
+            love.graphics.setColor(0.7, 0.9, 1)
+            love.graphics.print(selectedBase.commanderData.title, infoX + 40, y, 0, 0.95, 0.95)
+            
+            -- 显示特性
+            y = y + lineHeight
+            love.graphics.setColor(0.6, 1, 0.6)
+            for i, perk in ipairs(selectedBase.commanderData.perks) do
+                love.graphics.print(perk.name, infoX + 40, y, 0, 0.85, 0.85)
+                y = y + 18
+            end
+        end
+        
         -- 关闭提示
         love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
         love.graphics.rectangle("fill", infoX + 170, infoY + infoHeight - 35, 160, 25, 4, 4)
@@ -1414,6 +1549,119 @@ function love.draw()
         love.graphics.setColor(0.8, 0.9, 1, 0.9)
         love.graphics.print("Click to close", infoX + 182, infoY + infoHeight - 30, 0, 1.0, 1.0)
     end
+    
+    -- 绘制特殊建筑信息面板
+    if selectedSpecialBuilding and not selectedSpecialBuilding.isDead then
+        local infoX, infoY = 300, 250
+        local infoWidth, infoHeight = 420, 350
+        
+        -- 半透明背景
+        love.graphics.setColor(0.08, 0.08, 0.15, 0.94)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, infoHeight, 12, 12)
+        
+        -- 渐变头部
+        love.graphics.setColor(selectedSpecialBuilding.color[1] * 0.3, 
+            selectedSpecialBuilding.color[2] * 0.3, 
+            selectedSpecialBuilding.color[3] * 0.3, 0.7)
+        love.graphics.rectangle("fill", infoX, infoY, infoWidth, 50, 12, 12)
+        
+        -- 发光边框
+        love.graphics.setColor(selectedSpecialBuilding.color[1], 
+            selectedSpecialBuilding.color[2], 
+            selectedSpecialBuilding.color[3], 0.4)
+        love.graphics.setLineWidth(4)
+        love.graphics.rectangle("line", infoX - 1, infoY - 1, infoWidth + 2, infoHeight + 2, 12, 12)
+        love.graphics.setColor(selectedSpecialBuilding.color[1], 
+            selectedSpecialBuilding.color[2], 
+            selectedSpecialBuilding.color[3], 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", infoX, infoY, infoWidth, infoHeight, 12, 12)
+        love.graphics.setLineWidth(1)
+        
+        -- 标题
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.print("SPECIAL BUILDING", infoX + 117, infoY + 13, 0, 1.6, 1.6)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print("SPECIAL BUILDING", infoX + 115, infoY + 11, 0, 1.6, 1.6)
+        
+        local y = infoY + 60
+        local lineHeight = 24
+        
+        -- 建筑名称和队伍
+        love.graphics.setColor(selectedSpecialBuilding.color)
+        love.graphics.print(selectedSpecialBuilding.name, infoX + 40, y, 0, 1.4, 1.4)
+        
+        y = y + lineHeight + 4
+        love.graphics.setColor(0.8, 0.8, 0.9)
+        love.graphics.print(string.format("Team: %s", selectedSpecialBuilding.team:upper()), 
+            infoX + 40, y, 0, 1.1, 1.1)
+        
+        y = y + lineHeight + 6
+        
+        if selectedSpecialBuilding.isBuilding then
+            -- 建造中
+            love.graphics.setColor(1, 0.8, 0.2)
+            love.graphics.print("STATUS: UNDER CONSTRUCTION", infoX + 40, y, 0, 1.15, 1.15)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.5, 1, 0.5)
+            love.graphics.print(string.format("Build Progress: %.0f%%", 
+                (selectedSpecialBuilding.buildProgress / selectedSpecialBuilding.buildTime) * 100), 
+                infoX + 40, y, 0, 1.05, 1.05)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.7, 0.7, 0.7)
+            love.graphics.print(string.format("Time Remaining: %.1f seconds", 
+                selectedSpecialBuilding.buildTime - selectedSpecialBuilding.buildProgress), 
+                infoX + 40, y, 0, 0.95, 0.95)
+        else
+            -- 已完成
+            love.graphics.setColor(0.3, 1, 0.3)
+            love.graphics.print("STATUS: OPERATIONAL", infoX + 40, y, 0, 1.15, 1.15)
+            
+            y = y + lineHeight + 6
+            love.graphics.setColor(1, 0.9, 0.4)
+            love.graphics.print("SPECIAL EFFECT", infoX + 40, y, 0, 1.15, 1.15)
+            
+            y = y + lineHeight
+            love.graphics.setColor(0.7, 1, 0.7)
+            love.graphics.print(selectedSpecialBuilding.description, 
+                infoX + 40, y, infoWidth - 80, "left", 0, 1.0, 1.0)
+            
+            y = y + lineHeight * 2 + 10
+            if selectedSpecialBuilding.radius > 0 then
+                love.graphics.setColor(0.5, 0.9, 1)
+                love.graphics.print(string.format("Effect Radius: %.0f", 
+                    selectedSpecialBuilding.radius), infoX + 40, y, 0, 1.0, 1.0)
+            else
+                love.graphics.setColor(0.9, 0.9, 1)
+                love.graphics.print("Effect: Global (all team units)", 
+                    infoX + 40, y, 0, 1.0, 1.0)
+            end
+        end
+        
+        y = y + lineHeight + 8
+        love.graphics.setColor(1, 0.9, 0.4)
+        love.graphics.print("STRUCTURE STATS", infoX + 40, y, 0, 1.15, 1.15)
+        
+        y = y + lineHeight
+        love.graphics.setColor(0.3, 1, 0.3)
+        love.graphics.print(string.format("Health: %.0f / %.0f (%.0f%%)", 
+            selectedSpecialBuilding.health, selectedSpecialBuilding.maxHealth,
+            (selectedSpecialBuilding.health / selectedSpecialBuilding.maxHealth) * 100), 
+            infoX + 40, y, 0, 1.05, 1.05)
+        
+        y = y + lineHeight
+        love.graphics.setColor(1, 1, 0.7)
+        love.graphics.print(string.format("Position: (%.0f, %.0f)", 
+            selectedSpecialBuilding.x, selectedSpecialBuilding.y), infoX + 40, y, 0, 1.0, 1.0)
+        
+        -- 关闭提示
+        love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
+        love.graphics.rectangle("fill", infoX + 130, infoY + infoHeight - 35, 160, 25, 4, 4)
+        love.graphics.setColor(0.8, 0.9, 1, 0.9)
+        love.graphics.print("Click to close", infoX + 152, infoY + infoHeight - 30, 0, 1.0, 1.0)
+    end
 end
 
 function love.keypressed(key)
@@ -1428,6 +1676,8 @@ function love.keypressed(key)
         selectedAgent = nil
         selectedBase = nil
         selectedBarracks = nil
+        selectedSpecialBuilding = nil
+        specialBuildings = {}
         frameCount = 0
         love.load()
     elseif key == "m" then
@@ -1439,7 +1689,58 @@ function love.keypressed(key)
     end
 end
 
+-- Helper function to build special buildings
+function tryBuildSpecialBuilding(base, buildingType)
+    local config = SpecialBuilding.types[buildingType]
+    if not config then
+        print("Unknown building type: " .. buildingType)
+        return
+    end
+    
+    if base.resources >= config.cost then
+        -- Find a position near the base
+        local angle = math.random() * math.pi * 2
+        local distance = 100 + math.random() * 50
+        local x = base.x + math.cos(angle) * distance
+        local y = base.y + math.sin(angle) * distance
+        
+        -- Clamp to world bounds
+        x = math.max(50, math.min(WORLD_WIDTH - 50, x))
+        y = math.max(50, math.min(WORLD_HEIGHT - 50, y))
+        
+        -- Create the building
+        local building = SpecialBuilding.new(x, y, base.team, buildingType)
+        table.insert(specialBuildings, building)
+        
+        -- Deduct cost
+        base.resources = base.resources - config.cost
+        
+        print(string.format("%s team built %s at (%.0f, %.0f) for $%d", 
+            base.team, config.name, x, y, config.cost))
+        
+        -- Update stats
+        if battleStats[base.team] then
+            battleStats[base.team].goldSpent = battleStats[base.team].goldSpent + config.cost
+            battleStats[base.team].buildingsBuilt = battleStats[base.team].buildingsBuilt + 1
+        end
+    else
+        print(string.format("Not enough resources! Need $%d, have $%d", 
+            config.cost, base.resources))
+    end
+end
+
 function love.mousepressed(x, y, button)
+    -- 处理开始菜单点击
+    if not gameStarted then
+        local result = StartMenu.mousepressed(x, y, button)
+        if result == "start" then
+            gameStarted = true
+            StartMenu.active = false
+            startGame()
+        end
+        return
+    end
+    
     if button == 2 then  -- 右键拖拽摄像机
         camera.isDragging = true
         camera.dragStartX = x
@@ -1466,12 +1767,26 @@ function love.mousepressed(x, y, button)
         local worldY = (y + camera.y) / camera.scale
         
         -- 如果已经有选中的对象，点击任何地方都关闭信息面板
-        if selectedAgent or selectedBase or selectedBarracks or selectedTower then
+        if selectedAgent or selectedBase or selectedBarracks or selectedTower or selectedSpecialBuilding then
             selectedAgent = nil
             selectedBase = nil
             selectedBarracks = nil
             selectedTower = nil
+            selectedSpecialBuilding = nil
             return
+        end
+        
+        -- 检查是否点击了特殊建筑
+        for _, building in ipairs(specialBuildings) do
+            if not building.isDead then
+                local dx = worldX - building.x
+                local dy = worldY - building.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                if distance <= building.size then
+                    selectedSpecialBuilding = building
+                    return
+                end
+            end
         end
         
         -- 检查是否点击了防御塔
