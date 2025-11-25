@@ -229,6 +229,11 @@ function love.update(dt)
     redBase.minerBonus = redMiners * 2  -- 每个矿工提供+2采集速度
     blueBase.minerBonus = blueMiners * 2
     
+    -- 更新红方战术策略（每秒更新一次）
+    if frameCount % 60 == 0 then
+        redBase:updateStrategy(redMiners, redAlive, blueAlive)
+    end
+    
     -- 更新红方基地
     local shouldSpawnRed, unitClass = redBase:update(dt, redAlive, resources, redMiners)
     if shouldSpawnRed and unitClass and redAlive < redBase.maxUnits then
@@ -243,7 +248,8 @@ function love.update(dt)
         agent.resources = resources
         table.insert(redTeam, agent)
         battleStats.red.unitsProduced = battleStats.red.unitsProduced + 1
-        print(string.format("[Red] %s spawned! Total: %d (Miners: %d)", unitClass, redAlive + 1, redMiners))
+        print(string.format("[Red] %s spawned! Total: %d (Miners: %d) [%s Mode]", 
+            unitClass, redAlive + 1, redMiners, redBase.strategy.mode:upper()))
     end
     
     -- 红方兵营自动建造和生产
@@ -267,7 +273,9 @@ function love.update(dt)
     
     for i, barracks in ipairs(redBase.barracks) do
         local shouldSpawn, unitType, cost = barracks:update(dt, redBase.resources)
-        if shouldSpawn and unitType and redAlive < redBase.maxUnits and redBase.resources >= cost then
+        -- 检查可用资源（扣除保留金）
+        local availableGold = math.max(0, redBase.resources - redBase.strategy.reservedGold)
+        if shouldSpawn and unitType and redAlive < redBase.maxUnits and availableGold >= cost then
             redBase.resources = math.max(0, redBase.resources - cost)
             battleStats.red.goldSpent = battleStats.red.goldSpent + cost
             local x, y = barracks:getSpawnPosition()
@@ -285,6 +293,11 @@ function love.update(dt)
         end
     end
     
+    -- 更新蓝方战术策略（每秒更新一次）
+    if frameCount % 60 == 0 then
+        blueBase:updateStrategy(blueMiners, blueAlive, redAlive)
+    end
+    
     -- 更新蓝方基地
     local shouldSpawnBlue, unitClassBlue = blueBase:update(dt, blueAlive, resources, blueMiners)
     if shouldSpawnBlue and unitClassBlue and blueAlive < blueBase.maxUnits then
@@ -299,7 +312,8 @@ function love.update(dt)
         agent.resources = resources
         table.insert(blueTeam, agent)
         battleStats.blue.unitsProduced = battleStats.blue.unitsProduced + 1
-        print(string.format("[Blue] %s spawned! Total: %d (Miners: %d)", unitClassBlue, blueAlive + 1, blueMiners))
+        print(string.format("[Blue] %s spawned! Total: %d (Miners: %d) [%s Mode]", 
+            unitClassBlue, blueAlive + 1, blueMiners, blueBase.strategy.mode:upper()))
     end
     
     -- 蓝方兵营自动建造和生产
@@ -307,8 +321,8 @@ function love.update(dt)
         blueBase:tryAutoBuildBarracks(Barracks)
     end
     
-    -- 蓝方防御塔自动建造（每10秒尝试，错开时间）
-    if frameCount % 600 == 400 then
+    -- 蓝方防御塔自动建造（每10秒尝试，与红队同时检查以确保公平）
+    if frameCount % 600 == 100 then
         blueBase:tryAutoBuildTower(Tower)
     end
     
@@ -323,7 +337,9 @@ function love.update(dt)
     
     for i, barracks in ipairs(blueBase.barracks) do
         local shouldSpawn, unitType, cost = barracks:update(dt, blueBase.resources)
-        if shouldSpawn and unitType and blueAlive < blueBase.maxUnits and blueBase.resources >= cost then
+        -- 检查可用资源（扣除保留金）
+        local availableGold = math.max(0, blueBase.resources - blueBase.strategy.reservedGold)
+        if shouldSpawn and unitType and blueAlive < blueBase.maxUnits and availableGold >= cost then
             blueBase.resources = math.max(0, blueBase.resources - cost)
             battleStats.blue.goldSpent = battleStats.blue.goldSpent + cost
             local x, y = barracks:getSpawnPosition()
@@ -593,6 +609,28 @@ function love.draw()
             love.graphics.setColor(1, 0.95, 0.3, pulse)
             love.graphics.circle("fill", leftPanelX + 245, y + 8, 4)
         end
+        
+        y = y + lineH
+        -- 战术模式（新增）
+        love.graphics.setColor(0.8, 0.8, 0.8)
+        love.graphics.print("Strategy:", leftPanelX + 15, y, 0, 1, 1)
+        local modeColors = {
+            economy = {0.2, 1, 0.5},
+            defensive = {0.5, 0.8, 1},
+            offensive = {1, 0.3, 0.3},
+            desperate = {1, 0.8, 0.1}
+        }
+        local modeColor = modeColors[redBase.strategy.mode] or {1, 1, 1}
+        love.graphics.setColor(modeColor)
+        love.graphics.print(redBase.strategy.mode:upper(), leftPanelX + 170, y, 0, 1, 1)
+        
+        y = y + lineH - 3
+        -- 保留金
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Reserved:", leftPanelX + 15, y, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.7, 0.2)
+        love.graphics.print(string.format("$%d", redBase.strategy.reservedGold), 
+            leftPanelX + 170, y, 0, 0.95, 0.95)
     end
     
     -- 右侧蓝方信息面板（对称设计）
@@ -703,6 +741,28 @@ function love.draw()
             love.graphics.setColor(1, 0.95, 0.3, pulse)
             love.graphics.circle("fill", rightPanelX + 245, y + 8, 4)
         end
+        
+        y = y + lineH
+        -- 战术模式（新增）
+        love.graphics.setColor(0.8, 0.8, 0.8)
+        love.graphics.print("Strategy:", rightPanelX + 15, y, 0, 1, 1)
+        local modeColors = {
+            economy = {0.2, 1, 0.5},
+            defensive = {0.5, 0.8, 1},
+            offensive = {1, 0.3, 0.3},
+            desperate = {1, 0.8, 0.1}
+        }
+        local modeColor = modeColors[blueBase.strategy.mode] or {1, 1, 1}
+        love.graphics.setColor(modeColor)
+        love.graphics.print(blueBase.strategy.mode:upper(), rightPanelX + 170, y, 0, 1, 1)
+        
+        y = y + lineH - 3
+        -- 保留金
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Reserved:", rightPanelX + 15, y, 0, 0.9, 0.9)
+        love.graphics.setColor(1, 0.7, 0.2)
+        love.graphics.print(string.format("$%d", blueBase.strategy.reservedGold), 
+            rightPanelX + 170, y, 0, 0.95, 0.95)
     end
     
     -- 底部信息栏（现代设计）

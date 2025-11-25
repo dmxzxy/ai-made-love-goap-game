@@ -2,7 +2,53 @@
 
 A large-scale real-time strategy game built with Love2D and GOAP (Goal-Oriented Action Planning) AI system.
 
-## 🎨 Visual Effects System (NEW!)
+## 🧠 Tactical AI System (NEW!)
+
+### Dynamic Strategy Modes
+The AI now adapts its behavior based on game state:
+
+1. **Economy Mode** �
+   - Triggered: First 60 seconds or when miners < 2
+   - Focus: Rebuild economic foundation
+   - Reserved Gold: $150 (emergency fund)
+   - Unit Production: Prioritize miners, small defensive forces
+   - Goal: Establish stable resource income
+
+2. **Defensive Mode** 🛡️
+   - Triggered: Enemy has +5 unit advantage OR base HP < 70%
+   - Focus: Consolidate forces and defend territory
+   - Reserved Gold: $120
+   - Unit Production: Balanced army composition
+   - Wave Size: 4 units before attacking
+
+3. **Offensive Mode** ⚔️
+   - Triggered: Own unit advantage (+3) AND resources > $300
+   - Focus: Aggressive expansion and pressure
+   - Reserved Gold: $100
+   - Unit Production: High-quality assault units (Tanks, Demolishers, Rangers)
+   - Wave Size: 5 units for overwhelming attacks
+
+4. **Desperate Mode** 🔥
+   - Triggered: All miners dead OR (base HP < 30% AND units < 5)
+   - Focus: Last-ditch survival attempt
+   - Reserved Gold: $80 (reduced to enable comeback)
+   - Unit Production: Emergency miner rebuild, then cheap fast units
+   - Wave Size: 2 units for quick harassment
+
+### Strategic Features
+- **Resource Protection**: AI reserves gold to rebuild miners if they're wiped out
+- **No More Feeding**: Units are produced in waves, preventing single-unit suicide charges
+- **Comeback Mechanics**: Desperate mode enables dramatic reversals when near defeat
+- **Adaptive Decision Making**: Strategy updates every second based on battlefield state
+- **Visible AI State**: Strategy mode and reserved gold shown in UI panels
+
+### Benefits
+- 🎯 **Better Pacing**: No instant spending = more strategic buildup
+- 🔄 **Comebacks Possible**: Reserved gold enables economic recovery
+- 🎭 **Varied Gameplay**: Different strategies create diverse battle scenarios
+- 📊 **Transparent AI**: Players can see what the AI is thinking
+
+## 🎨 Visual Effects System
 
 ### Particle Effects
 - **Combat Effects**:

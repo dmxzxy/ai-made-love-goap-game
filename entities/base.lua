@@ -61,6 +61,19 @@ function Base.new(x, y, team, color)
         Frost = 200
     }
     
+    -- 战术AI系统（新增）
+    self.strategy = {
+        mode = "economy",  -- 当前策略：economy（发展经济）、defensive（防守）、offensive（进攻）、desperate（绝境反击）
+        reservedGold = 150,  -- 保留资源（用于紧急重建矿工）
+        waveSize = 0,  -- 当前波次积攒的兵力
+        waveTarget = 3,  -- 目标波次规模（3-5个单位一波）
+        lastWaveTime = 0,  -- 上次发起进攻的时间
+        waveInterval = 15,  -- 波次间隔（秒）
+        minMinerCount = 2,  -- 最低矿工数量保障
+        economyPhaseTime = 60,  -- 发展经济阶段持续时间（秒）
+        startTime = love.timer.getTime(),
+    }
+    
     -- 视觉效果
     self.flashTime = 0
     self.isDead = false
@@ -114,18 +127,21 @@ function Base:update(dt, currentUnitCount, resources, minerCount)
         self.resources = math.min(self.maxResources, self.resources + mined)
     end
     
-    -- 生产单位（如果未达到上限且有足够资源）
+    -- 生产单位（基于战术AI决策）
     if currentUnitCount < self.maxUnits then
+        -- 检查是否有足够的可用资源（扣除保留金）
+        local availableGold = math.max(0, self.resources - self.strategy.reservedGold)
+        
         -- 如果没有当前生产，选择一个兵种开始生产
         if not self.currentProduction then
-            self.currentProduction = self:chooseUnitToProduce(minerCount)
+            self.currentProduction = self:chooseUnitToProduce(minerCount, currentUnitCount)
         end
         
         if self.currentProduction then
             local cost = self.unitCosts[self.currentProduction]
             
-            -- 检查资源是否足够
-            if self.resources >= cost then
+            -- 检查资源是否足够（使用可用资源而非总资源）
+            if availableGold >= cost then
                 self.productionCooldown = self.productionCooldown + dt
                 self.productionProgress = self.productionCooldown / self.productionTime
                 
@@ -142,7 +158,7 @@ function Base:update(dt, currentUnitCount, resources, minerCount)
                     return true, producedUnit  -- 通知需要生产新单位和兵种类型
                 end
             else
-                -- 资源不足，暂停生产进度
+                -- 资源不足（考虑保留金），暂停生产进度
                 self.productionProgress = 0
             end
         end
@@ -154,49 +170,141 @@ function Base:update(dt, currentUnitCount, resources, minerCount)
     return false, nil
 end
 
--- 选择要生产的兵种（基于策略）
-function Base:chooseUnitToProduce(minerCount)
-    minerCount = minerCount or 0
+-- 更新战术策略
+function Base:updateStrategy(minerCount, currentUnitCount, enemyUnitCount)
+    local currentTime = love.timer.getTime()
+    local gameTime = currentTime - self.strategy.startTime
     
-    -- 前期优先生产矿工发展经济
-    if minerCount < 3 and self.resources >= 40 then
-        return "Miner"
+    minerCount = minerCount or 0
+    currentUnitCount = currentUnitCount or 0
+    enemyUnitCount = enemyUnitCount or 0
+    
+    -- 绝境模式：矿工全灭或濒临崩溃
+    if minerCount == 0 or (self.health < 300 and currentUnitCount < 5) then
+        self.strategy.mode = "desperate"
+        self.strategy.reservedGold = 80  -- 降低保留资源，孤注一掷
+        self.strategy.waveTarget = 2  -- 快速小波次
+        return
     end
     
-    -- 策略：根据资源量和随机性选择多样化兵种
-    local rand = math.random()
+    -- 经济发展模式：游戏前60秒或矿工不足
+    if gameTime < self.strategy.economyPhaseTime or minerCount < self.strategy.minMinerCount then
+        self.strategy.mode = "economy"
+        self.strategy.reservedGold = 150  -- 保留资源重建经济
+        self.strategy.waveTarget = 2  -- 少量兵力防守
+        return
+    end
     
-    if self.resources < 60 then
-        -- 资源不足，生产矿工或士兵
-        if minerCount < 5 and rand < 0.4 then
+    -- 防守模式：敌方兵力优势或基地受损
+    if enemyUnitCount > currentUnitCount + 5 or self.health < 700 then
+        self.strategy.mode = "defensive"
+        self.strategy.reservedGold = 120
+        self.strategy.waveTarget = 4  -- 积攒更多兵力
+        return
+    end
+    
+    -- 进攻模式：兵力优势且资源充足
+    if currentUnitCount > enemyUnitCount + 3 and self.resources > 300 then
+        self.strategy.mode = "offensive"
+        self.strategy.reservedGold = 100
+        self.strategy.waveTarget = 5  -- 大波次进攻
+        return
+    end
+    
+    -- 默认均衡模式
+    self.strategy.mode = "defensive"
+    self.strategy.reservedGold = 120
+    self.strategy.waveTarget = 3
+end
+
+-- 选择要生产的兵种（基于战术策略）
+function Base:chooseUnitToProduce(minerCount, currentUnitCount)
+    minerCount = minerCount or 0
+    currentUnitCount = currentUnitCount or 0
+    
+    -- 绝境模式：优先重建矿工
+    if self.strategy.mode == "desperate" then
+        if minerCount == 0 and self.resources >= 40 then
             return "Miner"
-        elseif rand < 0.7 then
+        end
+        -- 然后快速生产便宜单位
+        if self.resources >= 55 then
+            return math.random() < 0.5 and "Scout" or "Soldier"
+        elseif self.resources >= 50 then
             return "Soldier"
+        end
+        return nil
+    end
+    
+    -- 经济模式：优先补充矿工
+    if self.strategy.mode == "economy" then
+        if minerCount < self.strategy.minMinerCount and self.resources >= 40 then
+            return "Miner"
+        end
+        if minerCount < 4 and self.resources >= 100 then
+            return "Miner"
+        end
+        -- 少量防守兵力
+        if self.resources >= 60 then
+            local rand = math.random()
+            if rand < 0.4 then
+                return "Soldier"
+            elseif rand < 0.7 then
+                return "Scout"
+            else
+                return "Gunner"
+            end
+        end
+        return nil
+    end
+    
+    -- 防守模式：平衡兵种
+    if self.strategy.mode == "defensive" then
+        -- 确保最低矿工数
+        if minerCount < 3 and self.resources >= 80 then
+            return "Miner"
+        end
+        
+        local rand = math.random()
+        if self.resources >= 100 and rand < 0.15 then
+            return "Tank"  -- 重装防守
+        elseif self.resources >= 80 and rand < 0.30 then
+            return "Sniper"  -- 远程火力
+        elseif self.resources >= 75 and rand < 0.45 then
+            return "Healer"  -- 续航能力
+        elseif self.resources >= 70 and rand < 0.65 then
+            return "Gunner"  -- 火力压制
+        elseif self.resources >= 55 and rand < 0.80 then
+            return "Scout"  -- 机动性
         else
-            return "Scout"  -- 便宜的快速单位
+            return "Soldier"  -- 基础单位
         end
     end
     
-    -- 丰富的兵种组合
-    if minerCount < 5 and rand < 0.1 then
-        return "Miner"  -- 10% 继续补充矿工
-    elseif self.resources >= 100 and rand < 0.15 then
-        return "Tank"  -- 5% 坦克
-    elseif self.resources >= 90 and rand < 0.22 then
-        return "Demolisher"  -- 7% 爆破兵
-    elseif self.resources >= 85 and rand < 0.30 then
-        return "Ranger"  -- 8% 游侠
-    elseif self.resources >= 80 and rand < 0.42 then
-        return "Sniper"  -- 12% 狙击手
-    elseif self.resources >= 75 and rand < 0.52 then
-        return "Healer"  -- 10% 医疗兵
-    elseif self.resources >= 70 and rand < 0.67 then
-        return "Gunner"  -- 15% 机枪手
-    elseif self.resources >= 55 and rand < 0.80 then
-        return "Scout"  -- 13% 侦察兵
-    else
-        return "Soldier"  -- 20% 士兵
+    -- 进攻模式：高质量进攻单位
+    if self.strategy.mode == "offensive" then
+        -- 保持少量矿工
+        if minerCount < 2 and self.resources >= 100 then
+            return "Miner"
+        end
+        
+        local rand = math.random()
+        if self.resources >= 100 and rand < 0.20 then
+            return "Tank"  -- 突破手
+        elseif self.resources >= 90 and rand < 0.35 then
+            return "Demolisher"  -- 攻城单位
+        elseif self.resources >= 85 and rand < 0.50 then
+            return "Ranger"  -- 超远程压制
+        elseif self.resources >= 80 and rand < 0.65 then
+            return "Sniper"  -- 狙击威胁目标
+        elseif self.resources >= 70 and rand < 0.80 then
+            return "Gunner"  -- 火力输出
+        else
+            return "Soldier"  -- 填充兵力
+        end
     end
+    
+    return nil
 end
 
 function Base:takeDamage(damage, isCrit, attacker)
@@ -396,14 +504,27 @@ function Base:tryAutoBuildBarracks(Barracks)
     -- 所有可用的兵营类型
     local allBarracksTypes = {"Infantry", "Armory", "Sniper", "Heavy", "ScoutCamp", "Hospital", "Workshop", "RangerPost"}
     
-    -- 优先建造步兵营房（最便宜且实用）
-    if #self.barracks == 0 and self.resources >= 150 then
-        return self:buildBarracks("Infantry", Barracks)
+    -- 优先建造防御！确保至少有1座塔后再建兵营
+    if #self.barracks == 0 then
+        if #self.towers == 0 and self.resources < 300 then
+            -- 如果还没有塔且资源不够建塔+兵营，等待建塔
+            return false
+        end
+        -- 有塔了或资源充足，建造步兵营房
+        if self.resources >= 150 then
+            return self:buildBarracks("Infantry", Barracks)
+        end
     end
     
-    -- 第二个建造侦察营（便宜且快速）
-    if #self.barracks == 1 and self.resources >= 140 then
-        return self:buildBarracks("ScoutCamp", Barracks)
+    -- 第二个兵营：确保至少有2座塔
+    if #self.barracks == 1 then
+        if #self.towers < 2 and self.resources < 340 then
+            -- 优先建第二座塔
+            return false
+        end
+        if self.resources >= 140 then
+            return self:buildBarracks("ScoutCamp", Barracks)
+        end
     end
     
     -- 之后根据资源随机建造多样化兵营
@@ -517,25 +638,34 @@ function Base:tryAutoBuildTower(Tower)
         return false
     end
     
-    -- 优先建造箭塔（便宜且实用）
+    -- 第一座塔：优先建造箭塔（资源达到150就建）
     if #self.towers == 0 and self.resources >= 150 then
         return self:buildTower("Arrow", Tower)
     end
     
-    -- 根据资源和策略建造
+    -- 第二座塔：资源达到200就建（更早建第二座塔）
+    if #self.towers == 1 and self.resources >= 200 then
+        if math.random() < 0.6 then
+            return self:buildTower("Frost", Tower)  -- 优先冰冻塔（控制）
+        else
+            return self:buildTower("Arrow", Tower)
+        end
+    end
+    
+    -- 后续塔：根据资源和策略建造
     if self.resources >= 300 then
         -- 资源充足，建造高级塔
         local rand = math.random()
-        if rand < 0.3 then
+        if rand < 0.35 then
             return self:buildTower("Laser", Tower)
-        elseif rand < 0.6 then
+        elseif rand < 0.65 then
             return self:buildTower("Cannon", Tower)
         else
             return self:buildTower("Frost", Tower)
         end
     elseif self.resources >= 200 then
         -- 中等资源，冰冻塔或箭塔
-        if math.random() < 0.5 then
+        if math.random() < 0.6 then
             return self:buildTower("Frost", Tower)
         else
             return self:buildTower("Arrow", Tower)
