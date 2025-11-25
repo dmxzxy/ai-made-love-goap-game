@@ -17,60 +17,60 @@ function Base.new(x, y, team, color)
     self.armor = 0.3  -- 30%护甲
     
     -- 资源系统
-    self.resources = 200  -- 初始资源
-    self.maxResources = 800  -- 最大资源存储（提高上限）
+    self.resources = 250  -- 初始资源（200→250）
+    self.maxResources = 1200  -- 最大资源存储（800→1200）
     self.miningRange = 150  -- 采集范围
-    self.miningRate = 3  -- 基础每秒采集速度（降低基础速度）
+    self.miningRate = 5  -- 基础每秒采集速度（3→5）
     self.nearbyResources = {}  -- 范围内的资源点
     self.minerBonus = 0  -- 矿工提供的额外采集速度
     
     -- 生产系统和成本
     self.productionCooldown = 0
-    self.productionTime = 8  -- 基础生产时间
-    self.maxUnits = 25  -- 最大单位数量限制（提高到25）
+    self.productionTime = 6  -- 基础生产时间（8→6秒）
+    self.maxUnits = 35  -- 最大单位数量限制（25→35）
     self.unitsProduced = 0
     self.currentProduction = nil  -- 当前生产的兵种
     
-    -- 兵种成本
+    -- 兵种成本（降低所有成本约30%）
     self.unitCosts = {
-        Miner = 40,      -- 矿工：便宜的经济单位
-        Soldier = 50,    -- 士兵：基础战斗单位
-        Scout = 55,      -- 侦察兵：快速单位
-        Gunner = 70,     -- 机枪手：火力压制
-        Sniper = 80,     -- 狙击手：远程精准
-        Healer = 75,     -- 医疗兵：辅助治疗
-        Tank = 100,      -- 坦克：重装单位
-        Demolisher = 90, -- 爆破兵：攻城单位
-        Ranger = 85      -- 游侠：超远程
+        Miner = 30,      -- 矿工：便宜的经济单位（40→30）
+        Soldier = 35,    -- 士兵：基础战斗单位（50→35）
+        Scout = 40,      -- 侦察兵：快速单位（55→40）
+        Gunner = 50,     -- 机枪手：火力压制（70→50）
+        Sniper = 55,     -- 狙击手：远程精准（80→55）
+        Healer = 50,     -- 医疗兵：辅助治疗（75→50）
+        Tank = 70,       -- 坦克：重装单位（100→70）
+        Demolisher = 65, -- 爆破兵：攻城单位（90→65）
+        Ranger = 60      -- 游侠：超远程（85→60）
     }
     
     -- 兵营系统
     self.barracks = {}  -- 建造的兵营列表
-    self.maxBarracks = 6  -- 最大兵营数量（提高到6）
+    self.maxBarracks = 8  -- 最大兵营数量（6→8）
     self.barracksBuildQueue = {}  -- 兵营建造队列
     self.isConstructing = false
     self.constructionProgress = 0
     
     -- 防御塔系统
     self.towers = {}  -- 建造的防御塔列表
-    self.maxTowers = 4  -- 最大防御塔数量
+    self.maxTowers = 6  -- 最大防御塔数量（4→6）
     self.towerCosts = {
-        Arrow = 150,
-        Cannon = 250,
-        Laser = 300,
-        Frost = 200
+        Arrow = 120,   -- 150→120
+        Cannon = 200,  -- 250→200
+        Laser = 240,   -- 300→240
+        Frost = 160    -- 200→160
     }
     
     -- 战术AI系统（新增）
     self.strategy = {
         mode = "economy",  -- 当前策略：economy（发展经济）、defensive（防守）、offensive（进攻）、desperate（绝境反击）
-        reservedGold = 150,  -- 保留资源（用于紧急重建矿工）
+        reservedGold = 100,  -- 保留资源（150→100，减少保留资源）
         waveSize = 0,  -- 当前波次积攒的兵力
-        waveTarget = 3,  -- 目标波次规模（3-5个单位一波）
+        waveTarget = 4,  -- 目标波次规模（3→4个单位一波，更大规模）
         lastWaveTime = 0,  -- 上次发起进攻的时间
-        waveInterval = 15,  -- 波次间隔（秒）
-        minMinerCount = 2,  -- 最低矿工数量保障
-        economyPhaseTime = 60,  -- 发展经济阶段持续时间（秒）
+        waveInterval = 12,  -- 波次间隔（15→12秒，更频繁）
+        minMinerCount = 3,  -- 最低矿工数量保障（2→3）
+        economyPhaseTime = 45,  -- 发展经济阶段持续时间（60→45秒，更快进入战斗）
         startTime = love.timer.getTime(),
     }
     
@@ -81,6 +81,10 @@ function Base.new(x, y, team, color)
     
     -- 生产进度条
     self.productionProgress = 0
+    
+    -- 科技树系统
+    local TechTree = require("entities.tech_tree")
+    self.techTree = TechTree.new(team)
     
     return self
 end
@@ -98,15 +102,21 @@ function Base:update(dt, currentUnitCount, resources, minerCount)
         return nil, nil
     end
     
+    -- 更新科技树
+    if self.techTree then
+        self.techTree:update(dt, self)
+    end
+    
     -- 受击闪烁效果
     if self.flashTime > 0 then
         self.flashTime = self.flashTime - dt
     end
     
-    -- 自动采集附近的资源
+    -- 自动采集附近的资源（应用科技加成）
     self.nearbyResources = resources or {}
     local mined = 0
-    local totalMiningRate = self.miningRate + self.minerBonus  -- 基础速度 + 矿工加成
+    local miningBonus = self.techTree and self.techTree:getTechBonus("miningSpeedBonus") or 0
+    local totalMiningRate = (self.miningRate + self.minerBonus) * (1 + miningBonus)
     
     for _, resource in ipairs(self.nearbyResources) do
         if not resource.depleted then
@@ -215,6 +225,47 @@ function Base:updateStrategy(minerCount, currentUnitCount, enemyUnitCount)
     self.strategy.mode = "defensive"
     self.strategy.reservedGold = 120
     self.strategy.waveTarget = 3
+    
+    -- AI自动研究科技
+    self:tryAutoResearch()
+end
+
+-- AI自动研究科技
+function Base:tryAutoResearch()
+    if not self.techTree or self.techTree.currentResearch then
+        return  -- 已经在研究或没有科技树
+    end
+    
+    local TechTree = require("entities.tech_tree")
+    
+    -- 根据策略模式选择科技
+    if self.strategy.mode == "economy" then
+        -- 经济模式：优先经济科技
+        if not self.techTree:hasTech("improvedMining") and self.resources >= 350 then
+            self.techTree:startResearch("improvedMining", self)
+        elseif not self.techTree:hasTech("efficientStorage") and self.resources >= 300 then
+            self.techTree:startResearch("efficientStorage", self)
+        end
+    elseif self.strategy.mode == "offensive" then
+        -- 进攻模式：优先军事科技
+        if not self.techTree:hasTech("advancedWeapons") and self.resources >= 450 then
+            self.techTree:startResearch("advancedWeapons", self)
+        elseif not self.techTree:hasTech("tacticalTraining") and self.resources >= 400 then
+            self.techTree:startResearch("tacticalTraining", self)
+        end
+    elseif self.strategy.mode == "defensive" then
+        -- 防守模式：优先防御科技
+        if not self.techTree:hasTech("fortification") and self.resources >= 550 then
+            self.techTree:startResearch("fortification", self)
+        elseif not self.techTree:hasTech("combatArmor") and self.resources >= 500 then
+            self.techTree:startResearch("combatArmor", self)
+        end
+    end
+    
+    -- 通用科技（任何模式都可以研究）
+    if self.resources >= 450 and not self.techTree:hasTech("rapidDeployment") then
+        self.techTree:startResearch("rapidDeployment", self)
+    end
 end
 
 -- 选择要生产的兵种（基于战术策略）
@@ -579,42 +630,71 @@ function Base:buildTower(towerType, Tower)
     -- 扣除资源
     self.resources = math.max(0, self.resources - cost)
     
-    -- 智能防御塔布局：只在敌人方向建塔
+    -- 智能防御塔布局：根据基地位置判断敌人方向
     local towerCount = #self.towers
     local angle, distance
     
-    if self.team == "red" then
-        -- 红方基地在左侧(x=150)，敌人在右侧
-        -- 只在右侧和两侧前方建塔（0度到180度范围，避开后方）
-        -- 第一层：正前方防御（0度方向）
-        -- 第二层：右上和右下（45度和-45度）
-        -- 第三层：上方和下方（90度和-90度）
+    -- 判断基地位置（四个角落）
+    if self.x < 1200 and self.y < 600 then
+        -- 左上角（红队）- 敌人在右侧和下方，朝向右下
         local angleOptions = {
-            0,           -- 正前方
-            math.pi / 6,   -- 右上30度
-            -math.pi / 6,  -- 右下30度
-            math.pi / 4,   -- 右上45度
-            -math.pi / 4,  -- 右下45度
-            math.pi / 3,   -- 右上60度
-            -math.pi / 3,  -- 右下60度
-            math.pi / 2,   -- 正上方
-            -math.pi / 2   -- 正下方
+            0,                 -- 正右
+            math.pi / 4,       -- 右下45度
+            -math.pi / 4,      -- 右上45度
+            math.pi / 6,       -- 右下30度
+            -math.pi / 6,      -- 右上30度
+            math.pi / 2,       -- 正下
+            math.pi / 3,       -- 右下60度
+            -math.pi / 3,      -- 右上60度
+            -math.pi / 2       -- 正上
         }
         angle = angleOptions[(towerCount % #angleOptions) + 1]
         distance = 120 + math.floor(towerCount / #angleOptions) * 40
-    else
-        -- 蓝方基地在右侧(x=2250)，敌人在左侧
-        -- 只在左侧和两侧前方建塔（180度方向为中心）
+        
+    elseif self.x > 1200 and self.y < 600 then
+        -- 右上角（蓝队）- 敌人在左侧和下方，朝向左下
         local angleOptions = {
-            math.pi,           -- 正前方（左）
-            math.pi + math.pi / 6,   -- 左上30度
+            math.pi,           -- 正左
+            math.pi - math.pi / 4,   -- 左下45度
+            math.pi + math.pi / 4,   -- 左上45度
             math.pi - math.pi / 6,   -- 左下30度
+            math.pi + math.pi / 6,   -- 左上30度
+            -math.pi / 2,      -- 正下
+            math.pi - math.pi / 3,   -- 左下60度
+            math.pi + math.pi / 3,   -- 左上60度
+            math.pi / 2        -- 正上
+        }
+        angle = angleOptions[(towerCount % #angleOptions) + 1]
+        distance = 120 + math.floor(towerCount / #angleOptions) * 40
+        
+    elseif self.x < 1200 and self.y > 600 then
+        -- 左下角（绿队）- 敌人在右侧和上方，朝向右上
+        local angleOptions = {
+            0,                 -- 正右
+            -math.pi / 4,      -- 右上45度
+            math.pi / 4,       -- 右下45度
+            -math.pi / 6,      -- 右上30度
+            math.pi / 6,       -- 右下30度
+            -math.pi / 2,      -- 正上
+            -math.pi / 3,      -- 右上60度
+            math.pi / 3,       -- 右下60度
+            math.pi / 2        -- 正下
+        }
+        angle = angleOptions[(towerCount % #angleOptions) + 1]
+        distance = 120 + math.floor(towerCount / #angleOptions) * 40
+        
+    else
+        -- 右下角（黄队）- 敌人在左侧和上方，朝向左上
+        local angleOptions = {
+            math.pi,           -- 正左
             math.pi + math.pi / 4,   -- 左上45度
             math.pi - math.pi / 4,   -- 左下45度
+            math.pi + math.pi / 6,   -- 左上30度
+            math.pi - math.pi / 6,   -- 左下30度
+            -math.pi / 2,      -- 正上
             math.pi + math.pi / 3,   -- 左上60度
             math.pi - math.pi / 3,   -- 左下60度
-            math.pi / 2,       -- 正上方
-            -math.pi / 2       -- 正下方
+            math.pi / 2        -- 正下
         }
         angle = angleOptions[(towerCount % #angleOptions) + 1]
         distance = 120 + math.floor(towerCount / #angleOptions) * 40

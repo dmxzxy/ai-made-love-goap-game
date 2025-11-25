@@ -51,7 +51,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.hasBerserk = false
         self.radius = 18  -- 标准大小
         self.isMiner = true
-        self.miningRate = normalRandom(4, 6)  -- 每秒采集速度
+        self.miningRate = normalRandom(6, 9)  -- 每秒采集速度（4-6→6-9）
         self.miningRange = 50  -- 采集范围（必须靠近资源）
         self.carryCapacity = 50  -- 携带上限
         self.carriedResources = 0  -- 当前携带资源
@@ -260,7 +260,7 @@ function Agent.new(x, y, team, color, unitClass)
     -- 战斗反应系统
     self.lastAttacker = nil  -- 最后一个攻击我的敌人
     self.lastAttackedTime = 0  -- 上次被攻击的时间
-    self.aggroRadius = 200  -- 仇恨范围
+    self.aggroRadius = 350  -- 仇恨范围（200→350，更大的视野）
     
     -- 减速效果
     self.slowedUntil = 0
@@ -373,6 +373,13 @@ function Agent:update(dt)
         end
     end
     
+    -- 实时目标重新评估：定期检查是否有更近的目标
+    self.targetReevalTimer = (self.targetReevalTimer or 0) + dt
+    if self.targetReevalTimer >= 1.5 then  -- 每1.5秒重新评估一次
+        self.targetReevalTimer = 0
+        self:reevaluateTarget()
+    end
+    
     -- 矿工特殊逻辑
     if self.isMiner then
         self:updateMinerBehavior(dt)
@@ -464,9 +471,9 @@ function Agent:handleCollisions(dt)
         end
     end
     
-    -- 边界限制
-    self.x = math.max(self.radius, math.min(2400 - self.radius, self.x))
-    self.y = math.max(self.radius, math.min(1200 - self.radius, self.y))
+    -- 边界限制（适配新地图大小 3200x1800）
+    self.x = math.max(self.radius, math.min(3200 - self.radius, self.x))
+    self.y = math.max(self.radius, math.min(1800 - self.radius, self.y))
 end
 
 function Agent:updateWorldState()
@@ -549,6 +556,216 @@ function Agent:updateWorldState()
                 self.lastMoraleLog = moraleBoost
             end
         end
+    end
+end
+
+-- 重新评估目标：选择最优目标
+function Agent:reevaluateTarget()
+    if self.isMiner then return end  -- 矿工不参与战斗
+    
+    local bestTarget = nil
+    local bestScore = -math.huge
+    local currentDist = math.huge
+    
+    -- 如果有当前目标，计算距离
+    if self.target and not self.target.isDead and self.target.health > 0 then
+        local dx = self.target.x - self.x
+        local dy = self.target.y - self.y
+        currentDist = math.sqrt(dx * dx + dy * dy)
+    else
+        self.target = nil  -- 清除无效目标
+    end
+    
+    -- 评估所有敌方单位
+    for _, enemy in ipairs(self.enemies) do
+        if not enemy.isDead and enemy.health > 0 then
+            local dx = enemy.x - self.x
+            local dy = enemy.y - self.y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            
+            -- 只考虑合理范围内的目标（攻击范围的3倍）
+            if dist <= self.aggroRadius then
+                -- 计算目标优先级分数
+                local score = 0
+                
+                -- 1. 距离因素（越近越好）- 权重最高
+                local distScore = 1000 / (dist + 10)
+                score = score + distScore * 2.5
+                
+                -- 2. 血量因素（优先攻击残血目标）
+                local hpPercent = enemy.health / enemy.maxHealth
+                if hpPercent < 0.3 then
+                    score = score + 80  -- 残血目标高优先级
+                elseif hpPercent < 0.5 then
+                    score = score + 40
+                end
+                
+                -- 3. 单位类型优先级
+                if enemy.unitClass == "Healer" then
+                    score = score + 100  -- 优先击杀治疗
+                elseif enemy.unitClass == "Sniper" then
+                    score = score + 70  -- 优先击杀狙击手
+                elseif enemy.unitClass == "Miner" then
+                    score = score + 30  -- 矿工次优先
+                end
+                
+                -- 4. 威胁等级（高攻击力的敌人）
+                if enemy.attackDamage > 20 then
+                    score = score + 50
+                end
+                
+                -- 5. 当前目标粘性（避免频繁切换）
+                if self.target == enemy then
+                    score = score + 60  -- 保持当前目标的倾向
+                end
+                
+                -- 6. 正在攻击我的敌人优先级更高
+                if enemy == self.lastAttacker then
+                    score = score + 100
+                end
+                
+                if score > bestScore then
+                    bestScore = score
+                    bestTarget = enemy
+                end
+            end
+        end
+    end
+    
+    -- 评估敌方防御塔（当它们构成威胁时）
+    if self.enemyTowers then
+        for _, tower in ipairs(self.enemyTowers) do
+            if not tower.isDead and tower.health > 0 then
+                local dx = tower.x - self.x
+                local dy = tower.y - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                
+                -- 只考虑一定范围内的防御塔
+                if dist <= self.aggroRadius * 1.5 then
+                    local score = 0
+                    
+                    -- 1. 距离因素 - 更近的塔更危险
+                    local distScore = 800 / (dist + 10)
+                    score = score + distScore * 2.0
+                    
+                    -- 2. 塔的威胁等级 - 根据塔的类型和伤害
+                    local towerThreat = tower.damage or 10
+                    score = score + towerThreat * 2
+                    
+                    -- 3. 塔的血量 - 优先攻击残血的塔
+                    local hpPercent = tower.health / tower.maxHealth
+                    if hpPercent < 0.3 then
+                        score = score + 120  -- 残血塔高优先级
+                    elseif hpPercent < 0.5 then
+                        score = score + 60
+                    end
+                    
+                    -- 4. 如果塔在射程内且正在威胁自己，提高优先级
+                    if dist <= (tower.range or 200) + 50 then
+                        score = score + 150  -- 在塔的射程内，优先拆塔
+                    end
+                    
+                    -- 5. 当前目标粘性
+                    if self.target == tower then
+                        score = score + 80  -- 继续攻击当前塔
+                    end
+                    
+                    -- 6. 塔的优先级适中 - 低于敌军，但高于基地
+                    score = score * 0.7  -- 塔的优先级低于敌军
+                    
+                    if score > bestScore then
+                        bestScore = score
+                        bestTarget = tower
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 评估敌方基地（优先级最低，只有在没有更好目标时才攻击）
+    if self.enemyBases then
+        for _, enemyBase in ipairs(self.enemyBases) do
+            if not enemyBase.isDead then
+                local dx = enemyBase.x - self.x
+                local dy = enemyBase.y - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                
+                -- 基地基础分数极低
+                local score = 200 / (dist + 100)  -- 大幅降低基础分数
+                
+                -- 检查附近是否有敌军或防御塔
+                local nearbyEnemies = 0
+                local nearbyTowers = 0
+                
+                -- 检查敌军
+                for _, enemy in ipairs(self.enemies) do
+                    if not enemy.isDead and enemy.health > 0 then
+                        local ex = enemy.x - self.x
+                        local ey = enemy.y - self.y
+                        local edist = math.sqrt(ex * ex + ey * ey)
+                        if edist < 400 then  -- 扩大检查范围
+                            nearbyEnemies = nearbyEnemies + 1
+                        end
+                    end
+                end
+                
+                -- 检查防御塔
+                if self.enemyTowers then
+                    for _, tower in ipairs(self.enemyTowers) do
+                        if not tower.isDead and tower.health > 0 then
+                            local tx = tower.x - self.x
+                            local ty = tower.y - self.y
+                            local tdist = math.sqrt(tx * tx + ty * ty)
+                            if tdist < 400 then
+                                nearbyTowers = nearbyTowers + 1
+                            end
+                        end
+                    end
+                end
+                
+                -- 只有在附近既没有敌军也没有塔时，才考虑攻击基地
+                if nearbyEnemies == 0 and nearbyTowers == 0 then
+                    score = score + 80  -- 即使加成后，分数仍然很低
+                else
+                    -- 附近有威胁时，基地优先级极低
+                    score = score * 0.3
+                end
+                
+                -- 如果正在攻击基地，给予一些粘性（避免频繁切换）
+                if self.target == enemyBase then
+                    score = score + 30
+                end
+                
+                if score > bestScore then
+                    bestScore = score
+                    bestTarget = enemyBase
+                end
+            end
+        end
+    end
+    
+    -- 如果找到了更好的目标，切换目标
+    if bestTarget and bestTarget ~= self.target then
+        local oldTarget = self.target
+        self.target = bestTarget
+        self.currentPlan = nil  -- 重新规划路径
+        
+        -- 输出目标切换信息，区分不同的目标类型
+        local targetType = "Unknown"
+        if bestTarget.unitClass then
+            targetType = bestTarget.unitClass
+        elseif bestTarget.towerType then
+            targetType = "Tower-" .. bestTarget.towerType
+        elseif bestTarget.isBase then
+            targetType = "BASE"
+        end
+        
+        local dx = bestTarget.x - self.x
+        local dy = bestTarget.y - self.y
+        local newDist = math.sqrt(dx * dx + dy * dy)
+        
+        print(string.format("[%s %s] Target switch: %s (dist:%.0f score:%.1f)", 
+            self.team, self.unitClass, targetType, newDist, bestScore))
     end
 end
 

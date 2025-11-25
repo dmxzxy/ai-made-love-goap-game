@@ -4,63 +4,63 @@ Tower.__index = Tower
 
 -- 防御塔类型配置
 local towerTypes = {
-    -- 箭塔：快速射击，中等伤害（增强）
+    -- 箭塔：快速射击，中等伤害（平衡调整）
     Arrow = {
         name = "Arrow Tower",
         cost = 150,
         buildTime = 6,
-        damage = 22,  -- 提升伤害
-        attackSpeed = 1.5,  -- 更快射击
-        range = 280,  -- 增加射程
+        damage = 12,  -- 降低伤害（从22→12）
+        attackSpeed = 1.8,  -- 减慢射击（从1.5→1.8）
+        range = 220,  -- 减少射程（从280→220）
         color = {0.8, 0.6, 0.3},
-        size = 35,
-        health = 350,  -- 提升血量
+        size = 22,
+        health = 280,  -- 降低血量（从350→280）
         description = "Fast-firing tower with moderate range"
     },
     
-    -- 炮塔：超高伤害，溅射伤害（增强）
+    -- 炮塔：高伤害，溅射伤害（平衡调整）
     Cannon = {
         name = "Cannon Tower",
         cost = 250,
         buildTime = 10,
-        damage = 85,  -- 大幅提升伤害
-        attackSpeed = 0.5,  -- 稍快一点
-        range = 320,  -- 增加射程
-        splashRadius = 100,  -- 更大溅射范围
+        damage = 45,  -- 大幅降低伤害（从85→45）
+        attackSpeed = 0.6,  -- 减慢射速（从0.5→0.6）
+        range = 260,  -- 减少射程（从320→260）
+        splashRadius = 80,  -- 减小溅射范围（从100→80）
         color = {0.5, 0.5, 0.6},
-        size = 45,
-        health = 600,  -- 更耐打
+        size = 28,
+        health = 480,  -- 降低血量（从600→480）
         description = "Powerful splash damage, slow firing rate"
     },
     
-    -- 激光塔：高持续伤害，超远程（增强）
+    -- 激光塔：持续伤害，远程（平衡调整）
     Laser = {
         name = "Laser Tower",
         cost = 300,
         buildTime = 12,
-        damage = 35,  -- 提升持续伤害
-        attackSpeed = 10,  -- 激光持续时间
-        range = 400,  -- 超远射程
+        damage = 20,  -- 降低持续伤害（从35→20）
+        attackSpeed = 10,
+        range = 320,  -- 减少射程（从400→320）
         color = {0.3, 0.8, 1},
-        size = 40,
-        health = 400,
+        size = 25,
+        health = 350,  -- 降低血量（从400→350）
         description = "Long-range continuous damage beam"
     },
     
-    -- 冰冻塔：强力减速+伤害（增强）
+    -- 冰冻塔：减速+伤害（平衡调整）
     Frost = {
         name = "Frost Tower",
         cost = 200,
         buildTime = 8,
-        damage = 15,  -- 提升伤害
-        attackSpeed = 1.0,  -- 更快攻击
-        range = 260,  -- 增加射程
-        slowEffect = 0.4,  -- 减速60%（更强）
-        slowDuration = 2.5,   -- 持续更久
+        damage = 8,  -- 降低伤害（从15→8）
+        attackSpeed = 1.2,  -- 减慢攻击（从1.0→1.2）
+        range = 210,  -- 减少射程（从260→210）
+        slowEffect = 0.5,  -- 减弱减速效果（从0.4→0.5，即减速50%）
+        slowDuration = 2.0,   -- 缩短持续时间（从2.5→2.0）
         color = {0.5, 0.8, 1},
-        size = 38,
-        health = 320,
-        description = "Slows enemies by 60% for 2.5 seconds"
+        size = 24,
+        health = 280,  -- 降低血量（从320→280）
+        description = "Slows enemies by 50% for 2 seconds"
     }
 }
 

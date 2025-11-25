@@ -1,8 +1,44 @@
-# GOAP Battle - Love2D Strategic Warfare Game
+# GOAP Battle - Love2D Multi-Team Strategic Warfare Game
 
-A large-scale real-time strategy game built with Love2D and GOAP (Goal-Oriented Action Planning) AI system.
+A large-scale real-time strategy game built with Love2D and GOAP (Goal-Oriented Action Planning) AI system, featuring **dynamic multi-team battles** (2-4 teams).
 
-## 🧠 Tactical AI System (NEW!)
+## 🌟 Multi-Team System (NEW!)
+
+### Configurable Team Count
+The game now supports **2, 3, or 4-way battles**! Simply change `TEAM_COUNT` in `main.lua`:
+
+```lua
+local TEAM_COUNT = 4  -- Set to 2, 3, or 4
+```
+
+### Team Configurations
+- **RED Team** 🔴: Left side (classic attacker)
+- **BLUE Team** 🔵: Right side (classic defender)  
+- **GREEN Team** 🟢: Top side (new challenger!)
+- **YELLOW Team** 🟡: Bottom side (wildcard entry!)
+
+### Dynamic Gameplay Features
+- **Multi-directional Combat**: Teams attack all non-allied forces
+- **Alliance-Free Warfare**: Every team for themselves - no permanent alliances
+- **Strategic Positioning**: Teams spawn at map edges/corners based on count
+- **Adaptive Resource Distribution**: Resource points placed fairly for all teams
+- **Victory Condition**: Last team standing wins!
+
+### Benefits of Multi-Team Battles
+- 🎲 **Unpredictable Outcomes**: 3+ teams create chaotic, dynamic battles
+- 🧠 **Strategic Depth**: Teams must balance aggression vs conservation
+- 👀 **Spectator Value**: More engaging to watch with multiple fronts
+- 🔄 **Replay Value**: Each game plays out differently with team dynamics
+
+### Tower Improvements
+- **Reduced Size**: All towers 20-40% smaller to prevent overlap
+  - Arrow Tower: 35 → 22
+  - Cannon Tower: 45 → 28  
+  - Laser Tower: 40 → 25
+  - Frost Tower: 38 → 24
+- **Better Placement**: Smart distribution algorithm prevents stacking
+
+## 🧠 Tactical AI System
 
 ### Dynamic Strategy Modes
 The AI now adapts its behavior based on game state:

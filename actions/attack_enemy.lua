@@ -99,8 +99,29 @@ function AttackEnemy:perform(agent, dt)
     
     -- 攻击
     local damage = agent.attackDamage
-    local actualDamage = agent.target:takeDamage(damage, isCrit, agent)  -- 传递攻击者
+    
+    -- 兵种克制系统加成
+    local UnitCounter = require("systems.unit_counter")
+    local targetClass = agent.target.unitClass or (agent.target.towerType and "Tower") or nil
+    local counterMultiplier = UnitCounter.getDamageMultiplier(agent.unitClass, targetClass)
+    
+    -- 对防御塔造成额外伤害 (75% bonus)
+    local damageMultiplier = 1.0
+    if agent.target.towerType then
+        damageMultiplier = 1.75  -- 对塔的伤害提升75%
+    end
+    
+    -- 应用克制加成
+    damageMultiplier = damageMultiplier * counterMultiplier
+    
+    local finalDamage = damage * damageMultiplier
+    local actualDamage = agent.target:takeDamage(finalDamage, isCrit, agent)  -- 传递攻击者
     self.attackCooldown = agent.attackSpeed
+    
+    -- 克制提示
+    if counterMultiplier > 1.0 and actualDamage > 0 then
+        agent:addDamageNumber(string.format("克制! x%.1f", counterMultiplier), {1, 0.8, 0}, false)
+    end
     
     -- 创建攻击特效
     agent:createAttackEffect(agent.target.x, agent.target.y)

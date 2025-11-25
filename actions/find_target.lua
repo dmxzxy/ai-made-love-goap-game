@@ -22,83 +22,122 @@ function FindTarget:perform(agent, dt)
     local bestTarget = nil
     local bestScore = -math.huge
     
-    -- 首先检查是否有附近的防御塔（高威胁）
-    local nearbyTower = nil
-    local nearestTowerDist = 300  -- 防御塔威胁范围
+    -- 评估所有敌方单位（最高优先级）
+    for _, enemy in ipairs(agent.enemies) do
+        if enemy.health > 0 and not enemy.isDead then
+            local dx = enemy.x - agent.x
+            local dy = enemy.y - agent.y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            
+            -- 敌方单位基础分数很高
+            local score = 2000 / (distance + 10)
+            
+            -- 血量加成
+            local hpPercent = enemy.health / enemy.maxHealth
+            if hpPercent < 0.3 then
+                score = score + 200
+            elseif hpPercent < 0.5 then
+                score = score + 100
+            end
+            
+            -- 单位类型加成
+            if enemy.unitClass == "Healer" then
+                score = score + 300
+            elseif enemy.unitClass == "Sniper" then
+                score = score + 200
+            end
+            
+            if score > bestScore then
+                bestScore = score
+                bestTarget = enemy
+            end
+        end
+    end
     
+    -- 评估防御塔（中等优先级）
     if agent.enemyTowers then
         for _, tower in ipairs(agent.enemyTowers) do
-            if not tower.isDead and not tower.isBuilding then
+            if not tower.isDead and tower.health > 0 and not tower.isBuilding then
                 local dx = tower.x - agent.x
                 local dy = tower.y - agent.y
                 local distance = math.sqrt(dx * dx + dy * dy)
                 
-                -- 如果在防御塔攻击范围内，优先攻击塔
-                if distance < tower.range + 50 and distance < nearestTowerDist then
-                    nearestTowerDist = distance
-                    nearbyTower = tower
-                end
-            end
-        end
-    end
-    
-    if nearbyTower then
-        agent.target = nearbyTower
-        print(string.format("[%s] Priority target: Enemy tower in range!", agent.team))
-        return true
-    end
-    
-    -- 尝试找敌方单位
-    local hasLivingEnemies = false
-    for _, enemy in ipairs(agent.enemies) do
-        if enemy.health > 0 and not enemy.isDead then
-            hasLivingEnemies = true
-            break
-        end
-    end
-    
-    if hasLivingEnemies then
-        -- 有存活的敌方单位，优先攻击单位
-        local strategy = math.random(1, 3)
-        
-        for _, enemy in ipairs(agent.enemies) do
-            if enemy.health > 0 and not enemy.isDead then
-                local dx = enemy.x - agent.x
-                local dy = enemy.y - agent.y
-                local distance = math.sqrt(dx * dx + dy * dy)
+                -- 塔的基础分数低于敌军
+                local score = 800 / (distance + 10)
                 
-                local score = 0
-                if strategy == 1 then
-                    -- 策略1: 优先攻击近的敌人
-                    score = 1000 / (distance + 1)
-                elseif strategy == 2 then
-                    -- 策略2: 优先攻击血少的敌人
-                    score = (1 - enemy.health / enemy.maxHealth) * 1000
-                else
-                    -- 策略3: 综合考虑距离和血量
-                    local distanceScore = 500 / (distance + 1)
-                    local healthScore = (1 - enemy.health / enemy.maxHealth) * 500
-                    score = distanceScore + healthScore
+                -- 如果在塔的射程内，大幅提高优先级
+                if distance < (tower.range or 200) + 50 then
+                    score = score + 500  -- 受到威胁时优先拆塔
+                end
+                
+                -- 残血塔优先
+                local hpPercent = tower.health / tower.maxHealth
+                if hpPercent < 0.3 then
+                    score = score + 300
+                elseif hpPercent < 0.5 then
+                    score = score + 150
                 end
                 
                 if score > bestScore then
                     bestScore = score
-                    bestTarget = enemy
+                    bestTarget = tower
+                end
+            end
+        end
+    end
+    
+    -- 评估基地（最低优先级，只有在没有更好目标时）
+    if agent.enemyBase and not agent.enemyBase.isDead then
+        local dx = agent.enemyBase.x - agent.x
+        local dy = agent.enemyBase.y - agent.y
+        local distance = math.sqrt(dx * dx + dy * dy)
+        
+        -- 基地分数极低
+        local score = 100 / (distance + 100)
+        
+        -- 检查附近是否有威胁
+        local hasNearbyThreats = false
+        for _, enemy in ipairs(agent.enemies) do
+            if enemy.health > 0 and not enemy.isDead then
+                local ex = enemy.x - agent.x
+                local ey = enemy.y - agent.y
+                if math.sqrt(ex * ex + ey * ey) < 400 then
+                    hasNearbyThreats = true
+                    break
                 end
             end
         end
         
-        if bestTarget then
-            local strategyName = strategy == 1 and "Nearest" or (strategy == 2 and "Weakest" or "Balanced")
-            print(string.format("[%s] Target acquired (%s): Enemy HP=%.0f", 
-                agent.team, strategyName, bestTarget.health))
+        if not hasNearbyThreats and agent.enemyTowers then
+            for _, tower in ipairs(agent.enemyTowers) do
+                if not tower.isDead and tower.health > 0 then
+                    local tx = tower.x - agent.x
+                    local ty = tower.y - agent.y
+                    if math.sqrt(tx * tx + ty * ty) < 400 then
+                        hasNearbyThreats = true
+                        break
+                    end
+                end
+            end
         end
-    else
-        -- 没有存活的敌方单位，目标是敌方基地
-        if agent.enemyBase and not agent.enemyBase.isDead then
+        
+        -- 只有在没有威胁时才考虑攻击基地
+        if not hasNearbyThreats then
+            score = score + 50
+        else
+            score = score * 0.2  -- 有威胁时分数极低
+        end
+        
+        if score > bestScore then
+            bestScore = score
             bestTarget = agent.enemyBase
-            print(string.format("[%s] All enemies down, targeting enemy base!", agent.team))
         end
+    end
+    
+    if bestTarget then
+        local targetType = bestTarget.unitClass or (bestTarget.towerType and "Tower") or "Base"
+        print(string.format("[%s] Target acquired: %s (score: %.1f)", 
+            agent.team, targetType, bestScore))
     end
     
     agent.target = bestTarget

@@ -8,8 +8,8 @@ function Resource.new(x, y)
     self.x = x
     self.y = y
     self.size = 30
-    self.resources = 1500  -- 增加资源总量
-    self.maxResources = 1500
+    self.resources = 2500  -- 增加资源总量（1500→2500）
+    self.maxResources = 2500
     self.miningRate = 10
     self.depleted = false
     self.pulseTime = math.random() * math.pi * 2

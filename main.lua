@@ -9,52 +9,58 @@ local DamageNumbers = require("effects.damage_numbers")
 local Minimap = require("ui.minimap")
 local BattleNotifications = require("ui.battle_notifications")
 
--- 全局变量
-local redTeam = {}
-local blueTeam = {}
-local redBase = nil
-local blueBase = nil
-local resources = {}  -- 资源点列表
+-- 多方博弈配置
+local TEAM_COUNT = 4  -- 可以设置为 2, 3, 或 4
+local TEAM_CONFIGS = {
+    {name = "red", color = {1, 0.2, 0.2}, displayName = "RED"},
+    {name = "blue", color = {0.2, 0.2, 1}, displayName = "BLUE"},
+    {name = "green", color = {0.2, 1, 0.2}, displayName = "GREEN"},
+    {name = "yellow", color = {1, 1, 0.2}, displayName = "YELLOW"}
+}
+
+-- 全局变量（使用通用teams结构）
+local teams = {}  -- teams[teamName] = {units = {}, base = nil, stats = {}}
+local resources = {}
 local gameOver = false
 local winner = nil
 local frameCount = 0
 local debugInfo = {}
-local selectedAgent = nil  -- 当前选中的角色
-local selectedBase = nil   -- 当前选中的基地
-local selectedBarracks = nil  -- 当前选中的兵营
-local selectedTower = nil  -- 当前选中的防御塔
+local selectedAgent = nil
+local selectedBase = nil
+local selectedBarracks = nil
+local selectedTower = nil
+local showMinimap = true  -- 小地图显示开关
 
--- 战斗数据统计
-local battleStats = {
-    red = {
-        kills = 0,
-        deaths = 0,
-        damageDealt = 0,
-        damageReceived = 0,
-        unitsProduced = 0,
-        goldSpent = 0,
-        goldMined = 0,
-        buildingsBuilt = 0,
-        towerKills = 0
-    },
-    blue = {
-        kills = 0,
-        deaths = 0,
-        damageDealt = 0,
-        damageReceived = 0,
-        unitsProduced = 0,
-        goldSpent = 0,
-        goldMined = 0,
-        buildingsBuilt = 0,
-        towerKills = 0
-    }
-}
+-- 兼容性别名（保持旧代码兼容）
+local redTeam, blueTeam, redBase, blueBase
+
+-- 战斗数据统计（动态初始化）
+local battleStats = {}
+
+-- 初始化队伍统计
+local function initBattleStats()
+    battleStats = {}
+    for i = 1, TEAM_COUNT do
+        local teamName = TEAM_CONFIGS[i].name
+        battleStats[teamName] = {
+            kills = 0,
+            deaths = 0,
+            damageDealt = 0,
+            damageReceived = 0,
+            unitsProduced = 0,
+            goldSpent = 0,
+            goldMined = 0,
+            buildingsBuilt = 0,
+            towerKills = 0
+        }
+    end
+end
 
 -- 摄像机系统
 local camera = {
-    x = 600,         -- 摄像机初始偏移X（看向中间偏左）
-    y = 300,         -- 摄像机初始偏移Y（看向中间偏上）
-    scale = 0.8,     -- 初始缩放比例（缩小以看到更大视野）
+    x = 800,         -- 摄像机初始偏移X（适配新地图，看向中间）
+    y = 450,         -- 摄像机初始偏移Y（适配新地图，看向中间）
+    scale = 0.6,     -- 初始缩放比例（缩小以看到更大的地图）
     minScale = 0.3,  -- 最小缩放（可以看到整个战场）
     maxScale = 2.0,  -- 最大缩放
     isDragging = false,
@@ -69,94 +75,230 @@ local camera = {
 
 function love.load()
     -- 设置窗口
-    love.window.setTitle("GOAP Battle Game - Strategic Warfare")
-    love.window.setMode(1600, 900)  -- 标准窗口
+    love.window.setTitle("GOAP Battle Game - Multi-Team Strategic Warfare")
+    love.window.setMode(1600, 900)
     
-    -- 实际游戏世界更大（可以通过摄像机浏览）
-    WORLD_WIDTH = 2400
-    WORLD_HEIGHT = 1200
+    -- 实际游戏世界更大（扩大地图）
+    WORLD_WIDTH = 3200  -- 2400→3200
+    WORLD_HEIGHT = 1800  -- 1200→1800
     
     print("=== Game Loading ===")
-    math.randomseed(tostring(os.time()):reverse():sub(1, 7))  -- 设置随机种子
+    print(string.format("Team Count: %d", TEAM_COUNT))
+    math.randomseed(tostring(os.time()):reverse():sub(1, 7))
 
-    -- 重置战斗统计
-    battleStats = {
-        red = {kills = 0, deaths = 0, damageDealt = 0, damageReceived = 0, unitsProduced = 0, goldSpent = 0, goldMined = 0, buildingsBuilt = 0, towerKills = 0},
-        blue = {kills = 0, deaths = 0, damageDealt = 0, damageReceived = 0, unitsProduced = 0, goldSpent = 0, goldMined = 0, buildingsBuilt = 0, towerKills = 0}
+    -- 初始化战斗统计
+    initBattleStats()
+
+    -- 初始化所有队伍
+    teams = {}
+    for i = 1, TEAM_COUNT do
+        local config = TEAM_CONFIGS[i]
+        teams[config.name] = {
+            units = {},
+            base = nil,
+            config = config
+        }
+    end
+    
+    -- 计算基地位置（四个角落，扩大距离）
+    -- 中心点：(1600, 900)
+    -- 让所有基地到中心的距离相等，阵营间距离更大
+    local basePositions = {
+        {x = 250, y = 250},      -- 左上角（红队）
+        {x = 2950, y = 250},     -- 右上角（蓝队）
+        {x = 250, y = 1550},     -- 左下角（绿队）
+        {x = 2950, y = 1550}     -- 右下角（黄队）
     }
-
-    -- 创建基地（调整位置适应新地图）
-    redBase = Base.new(150, 600, "red", {1, 0.2, 0.2})
-    blueBase = Base.new(2250, 600, "blue", {0.2, 0.2, 1})
-    print("Bases created: Red and Blue")
     
-    -- 创建更多资源点（16个，优化分布更均匀）
+    -- 创建基地
+    for i = 1, TEAM_COUNT do
+        local config = TEAM_CONFIGS[i]
+        local pos = basePositions[i]
+        local base = Base.new(pos.x, pos.y, config.name, config.color)
+        teams[config.name].base = base
+        print(string.format("Base created: %s at (%.0f, %.0f)", config.displayName, pos.x, pos.y))
+    end
+    
+    -- 设置兼容性别名
+    redTeam = teams.red.units
+    blueTeam = teams.blue.units
+    redBase = teams.red.base
+    blueBase = teams.blue.base
+    
+    -- 创建资源点（根据队伍数量动态分布）
     resources = {}
-    -- 红方区域资源（5个）
-    table.insert(resources, Resource.new(250, 300))
-    table.insert(resources, Resource.new(250, 600))
-    table.insert(resources, Resource.new(250, 900))
-    table.insert(resources, Resource.new(450, 450))
-    table.insert(resources, Resource.new(450, 750))
+    if TEAM_COUNT == 2 then
+        -- 2队模式：左右分布
+        -- 左侧资源
+        for i = 1, 5 do
+            table.insert(resources, Resource.new(250 + math.random(-50, 50), 200 + i * 160))
+        end
+        -- 中央资源
+        for i = 1, 6 do
+            table.insert(resources, Resource.new(1200 + math.random(-200, 200), 200 + i * 160))
+        end
+        -- 右侧资源
+        for i = 1, 5 do
+            table.insert(resources, Resource.new(2150 + math.random(-50, 50), 200 + i * 160))
+        end
+    elseif TEAM_COUNT == 3 then
+        -- 3队模式：三角形布局（左上、右上、底部中间）
+        -- 左上区域（红队附近）
+        table.insert(resources, Resource.new(350, 300))
+        table.insert(resources, Resource.new(400, 450))
+        table.insert(resources, Resource.new(550, 350))
+        table.insert(resources, Resource.new(300, 600))
+        
+        -- 右上区域（蓝队附近）
+        table.insert(resources, Resource.new(2050, 300))
+        table.insert(resources, Resource.new(2000, 450))
+        table.insert(resources, Resource.new(1850, 350))
+        table.insert(resources, Resource.new(2100, 600))
+        
+        -- 底部中间区域（绿队附近）
+        table.insert(resources, Resource.new(1200, 900))
+        table.insert(resources, Resource.new(1000, 1000))
+        table.insert(resources, Resource.new(1400, 1000))
+        table.insert(resources, Resource.new(1200, 1050))
+        
+        -- 中心争夺区
+        table.insert(resources, Resource.new(1200, 600))
+        table.insert(resources, Resource.new(1000, 550))
+        table.insert(resources, Resource.new(1400, 550))
+        table.insert(resources, Resource.new(900, 700))
+        table.insert(resources, Resource.new(1500, 700))
+    else
+        -- 4队模式：四角基地，资源围绕中心对称分布
+        local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2  -- 中心点 (1600, 900)
+        
+        -- 每个象限的近基地资源（离基地较近，增加数量）
+        -- 左上象限（红队附近）
+        table.insert(resources, Resource.new(450, 350))
+        table.insert(resources, Resource.new(350, 500))
+        table.insert(resources, Resource.new(650, 450))
+        table.insert(resources, Resource.new(550, 600))
+        table.insert(resources, Resource.new(300, 400))
+        
+        -- 右上象限（蓝队附近）
+        table.insert(resources, Resource.new(2750, 350))
+        table.insert(resources, Resource.new(2850, 500))
+        table.insert(resources, Resource.new(2550, 450))
+        table.insert(resources, Resource.new(2650, 600))
+        table.insert(resources, Resource.new(2900, 400))
+        
+        -- 左下象限（绿队附近）
+        table.insert(resources, Resource.new(450, 1450))
+        table.insert(resources, Resource.new(350, 1300))
+        table.insert(resources, Resource.new(650, 1350))
+        table.insert(resources, Resource.new(550, 1200))
+        table.insert(resources, Resource.new(300, 1400))
+        
+        -- 右下象限（黄队附近）
+        table.insert(resources, Resource.new(2750, 1450))
+        table.insert(resources, Resource.new(2850, 1300))
+        table.insert(resources, Resource.new(2550, 1350))
+        table.insert(resources, Resource.new(2650, 1200))
+        table.insert(resources, Resource.new(2900, 1400))
+        
+        -- 中心争夺区（围绕1600, 900对称分布，大幅增加密度）
+        -- 核心区域（最激烈战场）
+        table.insert(resources, Resource.new(centerX, centerY))  -- 正中心
+        table.insert(resources, Resource.new(centerX - 150, centerY))
+        table.insert(resources, Resource.new(centerX + 150, centerY))
+        table.insert(resources, Resource.new(centerX, centerY - 120))
+        table.insert(resources, Resource.new(centerX, centerY + 120))
+        table.insert(resources, Resource.new(centerX - 100, centerY - 80))
+        table.insert(resources, Resource.new(centerX + 100, centerY - 80))
+        table.insert(resources, Resource.new(centerX - 100, centerY + 80))
+        table.insert(resources, Resource.new(centerX + 100, centerY + 80))
+        
+        -- 中环资源（扩大战场范围）
+        table.insert(resources, Resource.new(centerX - 250, centerY))
+        table.insert(resources, Resource.new(centerX + 250, centerY))
+        table.insert(resources, Resource.new(centerX, centerY - 200))
+        table.insert(resources, Resource.new(centerX, centerY + 200))
+        table.insert(resources, Resource.new(centerX - 180, centerY - 140))
+        table.insert(resources, Resource.new(centerX + 180, centerY - 140))
+        table.insert(resources, Resource.new(centerX - 180, centerY + 140))
+        table.insert(resources, Resource.new(centerX + 180, centerY + 140))
+        
+        -- 外环资源（连接各阵营到中心的通道）
+        table.insert(resources, Resource.new(centerX - 350, centerY))
+        table.insert(resources, Resource.new(centerX + 350, centerY))
+        table.insert(resources, Resource.new(centerX, centerY - 280))
+        table.insert(resources, Resource.new(centerX, centerY + 280))
+        table.insert(resources, Resource.new(centerX - 250, centerY - 200))
+        table.insert(resources, Resource.new(centerX + 250, centerY - 200))
+        table.insert(resources, Resource.new(centerX - 250, centerY + 200))
+        table.insert(resources, Resource.new(centerX + 250, centerY + 200))
+    end
+    print(string.format("Created %d resource points for %d teams", #resources, TEAM_COUNT))
     
-    -- 中立区资源（6个，增加争夺性）
-    table.insert(resources, Resource.new(800, 200))
-    table.insert(resources, Resource.new(800, 600))
-    table.insert(resources, Resource.new(800, 1000))
-    table.insert(resources, Resource.new(1600, 200))
-    table.insert(resources, Resource.new(1600, 600))
-    table.insert(resources, Resource.new(1600, 1000))
+    -- 为每个队伍创建初始单位
+    local initialCount = 8  -- 增加初始矿工数量（5→8）
+    print(string.format("Initial units per team: %d Miners", initialCount))
     
-    -- 蓝方区域资源（5个）
-    table.insert(resources, Resource.new(1950, 450))
-    table.insert(resources, Resource.new(1950, 750))
-    table.insert(resources, Resource.new(2150, 300))
-    table.insert(resources, Resource.new(2150, 600))
-    table.insert(resources, Resource.new(2150, 900))
-    print(string.format("Created %d resource points", #resources))
-    
-    -- 初始单位数量（增加到5个矿工）
-    local initialCount = 5
-    print(string.format("Initial units per team: %d Miners (for fairness)", initialCount))
-    
-    -- 创建红队初始单位（全部矿工）
-    for i = 1, initialCount do
-        local x, y = redBase:getSpawnPosition()
-        y = y + (i - 2) * 60  -- 垂直分布
-        local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, "Miner")
-        agent.angle = 0  -- 朝向右边
-        agent.myBase = redBase
-        agent.resources = resources
-        table.insert(redTeam, agent)
-        print(string.format("Red #%d [Miner]: HP=%.0f Speed=%.0f", 
-            i, agent.health, agent.moveSpeed))
+    for teamIdx = 1, TEAM_COUNT do
+        local config = TEAM_CONFIGS[teamIdx]
+        local teamData = teams[config.name]
+        local base = teamData.base
+        
+        for i = 1, initialCount do
+            local x, y = base:getSpawnPosition()
+            y = y + (i - 3) * 50  -- 垂直分布
+            local agent = Agent.new(x, y, config.name, config.color, "Miner")
+            
+            -- 设置朝向（朝向地图中心）
+            local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
+            agent.angle = math.atan2(centerY - y, centerX - x)
+            
+            agent.myBase = base
+            agent.resources = resources
+            table.insert(teamData.units, agent)
+            
+            print(string.format("%s #%d [Miner]: HP=%.0f Speed=%.0f", 
+                config.displayName, i, agent.health, agent.moveSpeed))
+        end
     end
     
-    -- 创建蓝队初始单位（全部矿工）
-    for i = 1, initialCount do
-        local x, y = blueBase:getSpawnPosition()
-        y = y + (i - 2) * 60  -- 垂直分布
-        local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, "Miner")
-        agent.angle = math.pi  -- 朝向左边
-        agent.myBase = blueBase
-        agent.resources = resources
-        table.insert(blueTeam, agent)
-        print(string.format("Blue #%d [Miner]: HP=%.0f Speed=%.0f", 
-            i, agent.health, agent.moveSpeed))
-    end
-    
-    -- 设置引用（矿工不需要敌人引用，但保留以便后续战斗单位使用）
-    for _, agent in ipairs(redTeam) do
-        agent.enemies = blueTeam
-        agent.allies = redTeam
-        agent.enemyBase = blueBase
-        agent.enemyTowers = blueBase.towers
-    end
-    for _, agent in ipairs(blueTeam) do
-        agent.enemies = redTeam
-        agent.allies = blueTeam
-        agent.enemyBase = redBase
-        agent.enemyTowers = redBase.towers
+    -- 设置每个单位的敌人和盟友引用
+    for teamIdx = 1, TEAM_COUNT do
+        local config = TEAM_CONFIGS[teamIdx]
+        local teamData = teams[config.name]
+        
+        for _, agent in ipairs(teamData.units) do
+            agent.allies = teamData.units
+            
+            -- 敌人是所有其他队伍
+            agent.enemies = {}
+            agent.enemyBases = {}
+            agent.enemyTowers = {}
+            
+            for otherIdx = 1, TEAM_COUNT do
+                if otherIdx ~= teamIdx then
+                    local otherConfig = TEAM_CONFIGS[otherIdx]
+                    local otherTeam = teams[otherConfig.name]
+                    
+                    -- 添加敌方单位
+                    for _, enemy in ipairs(otherTeam.units) do
+                        table.insert(agent.enemies, enemy)
+                    end
+                    
+                    -- 添加敌方基地
+                    table.insert(agent.enemyBases, otherTeam.base)
+                    
+                    -- 添加敌方防御塔
+                    for _, tower in ipairs(otherTeam.base.towers) do
+                        table.insert(agent.enemyTowers, tower)
+                    end
+                end
+            end
+            
+            -- 为兼容性设置enemyBase（选择最近的敌方基地）
+            if #agent.enemyBases > 0 then
+                agent.enemyBase = agent.enemyBases[1]
+            end
+        end
     end
     
     print("=== Game Loaded ===")
@@ -171,6 +313,204 @@ function love.load()
     
     print("Visual effects systems initialized")
 
+end
+
+-- 辅助函数：统计队伍单位
+local function countTeamUnits(teamUnits)
+    local alive = 0
+    local miners = 0
+    for _, agent in ipairs(teamUnits) do
+        if agent.health > 0 and not agent.isDead then
+            alive = alive + 1
+            if agent.isMiner then
+                miners = miners + 1
+            end
+        end
+    end
+    return alive, miners
+end
+
+-- 辅助函数：更新单个队伍
+local function updateTeam(teamName, dt, Barracks, Tower)
+    local teamData = teams[teamName]
+    if not teamData or teamData.base.isDead then
+        return
+    end
+    
+    local base = teamData.base
+    local units = teamData.units
+    local alive, miners = countTeamUnits(units)
+    
+    -- 更新战术策略
+    if frameCount % 60 == 0 then
+        -- 计算所有敌方单位总数
+        local totalEnemies = 0
+        for otherIdx = 1, TEAM_COUNT do
+            if TEAM_CONFIGS[otherIdx].name ~= teamName then
+                local otherTeam = teams[TEAM_CONFIGS[otherIdx].name]
+                if otherTeam and not otherTeam.base.isDead then
+                    local enemyAlive = countTeamUnits(otherTeam.units)
+                    totalEnemies = totalEnemies + enemyAlive
+                end
+            end
+        end
+        base:updateStrategy(miners, alive, totalEnemies)
+    end
+    
+    -- 更新基地并生产单位
+    base.minerBonus = miners * 2
+    local shouldSpawn, unitClass = base:update(dt, alive, resources, miners)
+    
+    if shouldSpawn and unitClass and alive < base.maxUnits then
+        local x, y = base:getSpawnPosition()
+        local agent = Agent.new(x, y, teamName, teamData.config.color, unitClass)
+        
+        -- 应用科技加成
+        if base.techTree then
+            local damageBonus = base.techTree:getTechBonus("damageBonus")
+            local healthBonus = base.techTree:getTechBonus("healthBonus")
+            local speedBonus = base.techTree:getTechBonus("speedBonus")
+            local attackSpeedBonus = base.techTree:getTechBonus("attackSpeedBonus")
+            local visionBonus = base.techTree:getTechBonus("visionBonus")
+            
+            if damageBonus > 0 then
+                agent.attackDamage = agent.attackDamage * (1 + damageBonus)
+            end
+            if healthBonus > 0 then
+                agent.maxHealth = agent.maxHealth * (1 + healthBonus)
+                agent.health = agent.maxHealth
+            end
+            if speedBonus > 0 then
+                agent.moveSpeed = agent.moveSpeed * (1 + speedBonus)
+            end
+            if attackSpeedBonus > 0 then
+                agent.attackSpeed = agent.attackSpeed / (1 + attackSpeedBonus)
+            end
+            if visionBonus > 0 then
+                agent.aggroRadius = agent.aggroRadius * (1 + visionBonus)
+            end
+            if base.techTree:hasRegeneration() and not agent.isMiner then
+                agent.hasRegen = true
+                agent.regenRate = 2  -- 每秒恢复2点生命
+            end
+            
+            -- 矿工采集加成
+            if agent.isMiner then
+                local miningBonus = base.techTree:getTechBonus("miningSpeedBonus")
+                if miningBonus > 0 then
+                    agent.miningRate = agent.miningRate * (1 + miningBonus)
+                end
+            end
+        end
+        
+        -- 设置朝向
+        local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
+        agent.angle = math.atan2(centerY - y, centerX - x)
+        
+        -- 设置引用
+        agent.myBase = base
+        agent.resources = resources
+        agent.allies = units
+        
+        -- 设置所有敌人
+        agent.enemies = {}
+        agent.enemyBases = {}
+        agent.enemyTowers = {}
+        for otherIdx = 1, TEAM_COUNT do
+            if TEAM_CONFIGS[otherIdx].name ~= teamName then
+                local otherTeam = teams[TEAM_CONFIGS[otherIdx].name]
+                for _, enemy in ipairs(otherTeam.units) do
+                    table.insert(agent.enemies, enemy)
+                end
+                table.insert(agent.enemyBases, otherTeam.base)
+                for _, tower in ipairs(otherTeam.base.towers) do
+                    table.insert(agent.enemyTowers, tower)
+                end
+            end
+        end
+        if #agent.enemyBases > 0 then
+            agent.enemyBase = agent.enemyBases[1]
+        end
+        
+        table.insert(units, agent)
+        battleStats[teamName].unitsProduced = battleStats[teamName].unitsProduced + 1
+        print(string.format("[%s] %s spawned! Total: %d (Miners: %d) [%s Mode]", 
+            teamData.config.displayName, unitClass, alive + 1, miners, base.strategy.mode:upper()))
+    end
+    
+    -- 自动建造兵营和防御塔
+    if frameCount % 300 == 0 then
+        base:tryAutoBuildBarracks(Barracks)
+    end
+    if frameCount % 600 == 100 then
+        base:tryAutoBuildTower(Tower)
+    end
+    
+    -- 更新防御塔
+    for i = #base.towers, 1, -1 do
+        local tower = base.towers[i]
+        -- 防御塔攻击所有敌方单位
+        local allEnemies = {}
+        for otherIdx = 1, TEAM_COUNT do
+            if TEAM_CONFIGS[otherIdx].name ~= teamName then
+                local otherTeam = teams[TEAM_CONFIGS[otherIdx].name]
+                for _, enemy in ipairs(otherTeam.units) do
+                    table.insert(allEnemies, enemy)
+                end
+            end
+        end
+        tower:update(dt, allEnemies)
+        if tower.isDead then
+            table.remove(base.towers, i)
+        end
+    end
+    
+    -- 更新兵营生产
+    for i, barracks in ipairs(base.barracks) do
+        local shouldSpawn, unitType, cost = barracks:update(dt, base.resources)
+        local availableGold = math.max(0, base.resources - base.strategy.reservedGold)
+        if shouldSpawn and unitType and alive < base.maxUnits and availableGold >= cost then
+            base.resources = math.max(0, base.resources - cost)
+            battleStats[teamName].goldSpent = battleStats[teamName].goldSpent + cost
+            local x, y = barracks:getSpawnPosition()
+            local agent = Agent.new(x, y, teamName, teamData.config.color, unitType)
+            
+            local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
+            agent.angle = math.atan2(centerY - y, centerX - x)
+            
+            agent.myBase = base
+            agent.resources = resources
+            agent.allies = units
+            agent.enemies = {}
+            agent.enemyBases = {}
+            agent.enemyTowers = {}
+            for otherIdx = 1, TEAM_COUNT do
+                if TEAM_CONFIGS[otherIdx].name ~= teamName then
+                    local otherTeam = teams[TEAM_CONFIGS[otherIdx].name]
+                    for _, enemy in ipairs(otherTeam.units) do
+                        table.insert(agent.enemies, enemy)
+                    end
+                    table.insert(agent.enemyBases, otherTeam.base)
+                    for _, tower in ipairs(otherTeam.base.towers) do
+                        table.insert(agent.enemyTowers, tower)
+                    end
+                end
+            end
+            if #agent.enemyBases > 0 then
+                agent.enemyBase = agent.enemyBases[1]
+            end
+            
+            table.insert(units, agent)
+            battleStats[teamName].unitsProduced = battleStats[teamName].unitsProduced + 1
+            print(string.format("[%s Barracks %d] %s spawned! Total: %d", 
+                teamData.config.displayName, i, unitType, alive + 1))
+        end
+    end
+    
+    -- 更新所有单位
+    for _, agent in ipairs(units) do
+        agent:update(dt)
+    end
 end
 
 function love.update(dt)
@@ -189,7 +529,7 @@ function love.update(dt)
     if camera.shakeIntensity > 0 then
         camera.shakeX = (math.random() - 0.5) * camera.shakeIntensity
         camera.shakeY = (math.random() - 0.5) * camera.shakeIntensity
-        camera.shakeIntensity = camera.shakeIntensity * 0.9  -- 衰减
+        camera.shakeIntensity = camera.shakeIntensity * 0.9
         if camera.shakeIntensity < 0.1 then
             camera.shakeIntensity = 0
             camera.shakeX = 0
@@ -202,187 +542,44 @@ function love.update(dt)
         resource:update(dt)
     end
     
-    -- 更新基地和生产单位
-    local redAlive = 0
-    local redMiners = 0
-    for _, agent in ipairs(redTeam) do
-        if agent.health > 0 and not agent.isDead then
-            redAlive = redAlive + 1
-            if agent.isMiner then
-                redMiners = redMiners + 1
+    -- 更新所有队伍
+    for i = 1, TEAM_COUNT do
+        updateTeam(TEAM_CONFIGS[i].name, dt, Barracks, Tower)
+    end
+    
+    -- 检查游戏是否结束（只剩一个队伍存活）
+    if not gameOver then
+        local aliveTeams = {}
+        for i = 1, TEAM_COUNT do
+            local config = TEAM_CONFIGS[i]
+            local teamData = teams[config.name]
+            if teamData and not teamData.base.isDead then
+                table.insert(aliveTeams, config)
             end
         end
-    end
-    
-    local blueAlive = 0
-    local blueMiners = 0
-    for _, agent in ipairs(blueTeam) do
-        if agent.health > 0 and not agent.isDead then
-            blueAlive = blueAlive + 1
-            if agent.isMiner then
-                blueMiners = blueMiners + 1
-            end
+        
+        if #aliveTeams == 1 then
+            gameOver = true
+            winner = aliveTeams[1].displayName .. " Team"
+            BattleNotifications.victory(aliveTeams[1].name)
+            print(string.format("=== GAME OVER === %s Team VICTORY! Time: %.1fs", 
+                aliveTeams[1].displayName, frameCount / 60))
+        elseif #aliveTeams == 0 then
+            gameOver = true
+            winner = "DRAW"
+            print("=== GAME OVER === All bases destroyed! DRAW!")
         end
     end
     
-    -- 重置矿工加成（每帧重新计算）
-    redBase.minerBonus = redMiners * 2  -- 每个矿工提供+2采集速度
-    blueBase.minerBonus = blueMiners * 2
-    
-    -- 更新红方战术策略（每秒更新一次）
-    if frameCount % 60 == 0 then
-        redBase:updateStrategy(redMiners, redAlive, blueAlive)
+    -- 更新统计信息（兼容性）
+    if teams.red and teams.blue then
+        local redAlive, redMiners = countTeamUnits(teams.red.units)
+        local blueAlive, blueMiners = countTeamUnits(teams.blue.units)
+        debugInfo.redAlive = redAlive
+        debugInfo.blueAlive = blueAlive
+        debugInfo.redBaseHP = teams.red.base.health
+        debugInfo.blueBaseHP = teams.blue.base.health
     end
-    
-    -- 更新红方基地
-    local shouldSpawnRed, unitClass = redBase:update(dt, redAlive, resources, redMiners)
-    if shouldSpawnRed and unitClass and redAlive < redBase.maxUnits then
-        local x, y = redBase:getSpawnPosition()
-        local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitClass)
-        agent.angle = 0
-        agent.enemies = blueTeam
-        agent.allies = redTeam
-        agent.enemyBase = blueBase
-        agent.enemyTowers = blueBase.towers
-        agent.myBase = redBase
-        agent.resources = resources
-        table.insert(redTeam, agent)
-        battleStats.red.unitsProduced = battleStats.red.unitsProduced + 1
-        print(string.format("[Red] %s spawned! Total: %d (Miners: %d) [%s Mode]", 
-            unitClass, redAlive + 1, redMiners, redBase.strategy.mode:upper()))
-    end
-    
-    -- 红方兵营自动建造和生产
-    if frameCount % 300 == 0 then  -- 每5秒尝试建造兵营
-        redBase:tryAutoBuildBarracks(Barracks)
-    end
-    
-    -- 红方防御塔自动建造（每10秒尝试）
-    if frameCount % 600 == 100 then
-        redBase:tryAutoBuildTower(Tower)
-    end
-    
-    -- 更新红方防御塔
-    for i = #redBase.towers, 1, -1 do
-        local tower = redBase.towers[i]
-        tower:update(dt, blueTeam)
-        if tower.isDead then
-            table.remove(redBase.towers, i)
-        end
-    end
-    
-    for i, barracks in ipairs(redBase.barracks) do
-        local shouldSpawn, unitType, cost = barracks:update(dt, redBase.resources)
-        -- 检查可用资源（扣除保留金）
-        local availableGold = math.max(0, redBase.resources - redBase.strategy.reservedGold)
-        if shouldSpawn and unitType and redAlive < redBase.maxUnits and availableGold >= cost then
-            redBase.resources = math.max(0, redBase.resources - cost)
-            battleStats.red.goldSpent = battleStats.red.goldSpent + cost
-            local x, y = barracks:getSpawnPosition()
-            local agent = Agent.new(x, y, "red", {1, 0.2, 0.2}, unitType)
-            agent.angle = 0
-            agent.enemies = blueTeam
-            agent.allies = redTeam
-            agent.enemyBase = blueBase
-            agent.enemyTowers = blueBase.towers
-            agent.myBase = redBase
-            agent.resources = resources
-            table.insert(redTeam, agent)
-            battleStats.red.unitsProduced = battleStats.red.unitsProduced + 1
-            print(string.format("[Red Barracks %d] %s spawned! Total: %d", i, unitType, redAlive + 1))
-        end
-    end
-    
-    -- 更新蓝方战术策略（每秒更新一次）
-    if frameCount % 60 == 0 then
-        blueBase:updateStrategy(blueMiners, blueAlive, redAlive)
-    end
-    
-    -- 更新蓝方基地
-    local shouldSpawnBlue, unitClassBlue = blueBase:update(dt, blueAlive, resources, blueMiners)
-    if shouldSpawnBlue and unitClassBlue and blueAlive < blueBase.maxUnits then
-        local x, y = blueBase:getSpawnPosition()
-        local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, unitClassBlue)
-        agent.angle = math.pi
-        agent.enemies = redTeam
-        agent.allies = blueTeam
-        agent.enemyBase = redBase
-        agent.enemyTowers = redBase.towers
-        agent.myBase = blueBase
-        agent.resources = resources
-        table.insert(blueTeam, agent)
-        battleStats.blue.unitsProduced = battleStats.blue.unitsProduced + 1
-        print(string.format("[Blue] %s spawned! Total: %d (Miners: %d) [%s Mode]", 
-            unitClassBlue, blueAlive + 1, blueMiners, blueBase.strategy.mode:upper()))
-    end
-    
-    -- 蓝方兵营自动建造和生产
-    if frameCount % 300 == 0 then  -- 每5秒尝试建造兵营
-        blueBase:tryAutoBuildBarracks(Barracks)
-    end
-    
-    -- 蓝方防御塔自动建造（每10秒尝试，与红队同时检查以确保公平）
-    if frameCount % 600 == 100 then
-        blueBase:tryAutoBuildTower(Tower)
-    end
-    
-    -- 更新蓝方防御塔
-    for i = #blueBase.towers, 1, -1 do
-        local tower = blueBase.towers[i]
-        tower:update(dt, redTeam)
-        if tower.isDead then
-            table.remove(blueBase.towers, i)
-        end
-    end
-    
-    for i, barracks in ipairs(blueBase.barracks) do
-        local shouldSpawn, unitType, cost = barracks:update(dt, blueBase.resources)
-        -- 检查可用资源（扣除保留金）
-        local availableGold = math.max(0, blueBase.resources - blueBase.strategy.reservedGold)
-        if shouldSpawn and unitType and blueAlive < blueBase.maxUnits and availableGold >= cost then
-            blueBase.resources = math.max(0, blueBase.resources - cost)
-            battleStats.blue.goldSpent = battleStats.blue.goldSpent + cost
-            local x, y = barracks:getSpawnPosition()
-            local agent = Agent.new(x, y, "blue", {0.2, 0.2, 1}, unitType)
-            agent.angle = math.pi
-            agent.enemies = redTeam
-            agent.allies = blueTeam
-            agent.enemyBase = redBase
-            agent.enemyTowers = redBase.towers
-            agent.myBase = blueBase
-            agent.resources = resources
-            table.insert(blueTeam, agent)
-            battleStats.blue.unitsProduced = battleStats.blue.unitsProduced + 1
-            print(string.format("[Blue Barracks %d] %s spawned! Total: %d", i, unitType, blueAlive + 1))
-        end
-    end
-    
-    -- 更新所有单位
-    for _, agent in ipairs(redTeam) do
-        agent:update(dt)
-    end
-    for _, agent in ipairs(blueTeam) do
-        agent:update(dt)
-    end
-    
-    -- 检查游戏是否结束（基地被摧毁）
-    if redBase.isDead and not gameOver then
-        gameOver = true
-        winner = "Blue Team"
-        BattleNotifications.victory("blue")
-        print(string.format("=== GAME OVER === Blue Team destroyed Red Base! Time: %.1fs", frameCount / 60))
-    elseif blueBase.isDead and not gameOver then
-        gameOver = true
-        winner = "Red Team"
-        BattleNotifications.victory("red")
-        print(string.format("=== GAME OVER === Red Team destroyed Blue Base! Time: %.1fs", frameCount / 60))
-    end
-    
-    -- 更新统计信息
-    debugInfo.redAlive = redAlive
-    debugInfo.blueAlive = blueAlive
-    debugInfo.redBaseHP = redBase.health
-    debugInfo.blueBaseHP = blueBase.health
 end
 
 function love.draw()
@@ -407,27 +604,32 @@ function love.draw()
     
     -- 绘制标题
     love.graphics.setColor(1, 1, 1)
-    love.graphics.print("GOAP Battle - Strategic Warfare", 20, 20, 0, 2, 2)
-    love.graphics.print("GOAP Battle - Base Defense", 20, 20, 0, 2, 2)
+    love.graphics.print("GOAP Battle - Multi-Team Warfare", 20, 20, 0, 2, 2)
     
-    -- 绘制基地
-    redBase:draw()
-    blueBase:draw()
-    
-    -- 绘制兵营
-    for _, barracks in ipairs(redBase.barracks) do
-        barracks:draw()
-    end
-    for _, barracks in ipairs(blueBase.barracks) do
-        barracks:draw()
-    end
-    
-    -- 绘制防御塔
-    for _, tower in ipairs(redBase.towers) do
-        tower:draw()
-    end
-    for _, tower in ipairs(blueBase.towers) do
-        tower:draw()
+    -- 绘制所有队伍的基地、兵营、防御塔
+    for i = 1, TEAM_COUNT do
+        local teamName = TEAM_CONFIGS[i].name
+        local teamData = teams[teamName]
+        if teamData then
+            -- 绘制基地
+            if teamData.base then
+                teamData.base:draw()
+            end
+            
+            -- 绘制兵营
+            if teamData.base and teamData.base.barracks then
+                for _, barracks in ipairs(teamData.base.barracks) do
+                    barracks:draw()
+                end
+            end
+            
+            -- 绘制防御塔
+            if teamData.base and teamData.base.towers then
+                for _, tower in ipairs(teamData.base.towers) do
+                    tower:draw()
+                end
+            end
+        end
     end
     
     -- 绘制资源节点
@@ -435,12 +637,15 @@ function love.draw()
         resource:draw()
     end
     
-    -- 绘制所有单位
-    for _, agent in ipairs(redTeam) do
-        agent:draw()
-    end
-    for _, agent in ipairs(blueTeam) do
-        agent:draw()
+    -- 绘制所有队伍的单位
+    for i = 1, TEAM_COUNT do
+        local teamName = TEAM_CONFIGS[i].name
+        local teamData = teams[teamName]
+        if teamData and teamData.units then
+            for _, agent in ipairs(teamData.units) do
+                agent:draw()
+            end
+        end
     end
     
     -- 绘制粒子特效
@@ -454,7 +659,6 @@ function love.draw()
     
     -- === UI层（不受摄像机影响）===
     
-    -- 顶部深色半透明背景条
     -- 顶部信息栏（现代渐变效果）
     love.graphics.setColor(0.05, 0.05, 0.12, 0.95)
     love.graphics.rectangle("fill", 0, 0, 1600, 55)
@@ -469,95 +673,103 @@ function love.draw()
     
     -- 游戏标题（带阴影+双色效果）
     love.graphics.setColor(0, 0, 0, 0.5)
-    love.graphics.print("GOAP STRATEGIC WARFARE", 22, 14, 0, 1.9, 1.9)
+    love.graphics.print(string.format("GOAP %d-TEAM", TEAM_COUNT), 22, 16, 0, 1.6, 1.6)
     love.graphics.setColor(1, 0.9, 0.3)
-    love.graphics.print("GOAP", 20, 12, 0, 1.9, 1.9)
+    love.graphics.print("GOAP", 20, 14, 0, 1.6, 1.6)
     love.graphics.setColor(0.8, 0.8, 0.95)
-    love.graphics.print(" STRATEGIC WARFARE", 100, 12, 0, 1.9, 1.9)
+    love.graphics.print(string.format(" %d-TEAM", TEAM_COUNT), 88, 14, 0, 1.6, 1.6)
     
-    -- 战斗时间（带背景圆圈）
+    -- 战斗时间（紧凑设计）
     love.graphics.setColor(0.3, 0.7, 0.3, 0.25)
-    love.graphics.circle("fill", 665, 28, 20)
+    love.graphics.circle("fill", 395, 28, 18)
     love.graphics.setColor(0.7, 0.95, 0.7)
-    love.graphics.print(string.format("%.1fs", frameCount / 60), 690, 16, 0, 1.3, 1.3)
+    love.graphics.print(string.format("%.1fs", frameCount / 60), 418, 18, 0, 1.2, 1.2)
     love.graphics.setColor(0.5, 0.9, 0.5, 0.8)
-    love.graphics.circle("line", 650, 28, 10)
-    love.graphics.circle("fill", 650, 28, 3)
+    love.graphics.circle("line", 380, 28, 9)
+    love.graphics.circle("fill", 380, 28, 3)
     
-    -- 摄像机信息（科技感面板）
+    -- 摄像机信息（右上角，缩小字号）
     love.graphics.setColor(0.15, 0.25, 0.4, 0.4)
-    love.graphics.rectangle("fill", 1185, 10, 405, 35, 5, 5)
-    love.graphics.setColor(0.3, 0.6, 0.9, 0.6)
-    love.graphics.setLineWidth(1.5)
-    love.graphics.rectangle("line", 1185, 10, 405, 35, 5, 5)
-    love.graphics.setLineWidth(1)
-    love.graphics.setColor(0.4, 0.75, 1)
-    love.graphics.print(string.format("Zoom: %.2fx | Pos: (%.0f, %.0f)", 
-        camera.scale, camera.x, camera.y), 1200, 18, 0, 1.05, 1.05)
+    love.graphics.rectangle("fill", 1360, 10, 230, 35, 5, 5)
+    love.graphics.setColor(0.6, 0.8, 1)
+    love.graphics.print(string.format("Cam: %.0f,%.0f", camera.x, camera.y), 1370, 14, 0, 0.85, 0.85)
+    love.graphics.print(string.format("Zoom: %.0f%%", camera.scale * 100), 1370, 27, 0, 0.85, 0.85)
     
-    -- 左侧红方信息面板（升级设计）
-    local leftPanelX = 10
-    local leftPanelY = 65
-    local panelWidth = 260
-    local panelHeight = 200
+    -- 绘制所有队伍的状态面板（右侧垂直排列）
+    local panelWidth = 240  -- 统一面板宽度
+    local panelHeight = 180  -- 增加高度以容纳更多信息
+    local panelX = 1350  -- 固定在右侧
+    local startY = 65  -- 起始Y坐标
+    local spacing = 10  -- 面板之间的间距
     
-    -- 红方背景面板（带渐变+光晕）
-    love.graphics.setColor(0.15, 0.02, 0.02, 0.92)
-    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, panelHeight, 10, 10)
-    love.graphics.setColor(0.3, 0.05, 0.05, 0.5)
-    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 45, 10, 10)
-    
-    -- 发光边框
-    love.graphics.setColor(1, 0.2, 0.2, 0.3)
-    love.graphics.setLineWidth(4)
-    love.graphics.rectangle("line", leftPanelX - 1, leftPanelY - 1, panelWidth + 2, panelHeight + 2, 10, 10)
-    love.graphics.setColor(1, 0.3, 0.3, 0.8)
-    love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", leftPanelX, leftPanelY, panelWidth, panelHeight, 10, 10)
-    love.graphics.setLineWidth(1)
-    
-    -- 红方标题栏（立体效果）
-    love.graphics.setColor(0.8, 0.15, 0.15)
-    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 42, 10, 10)
-    love.graphics.setColor(1, 0.2, 0.2, 0.4)
-    love.graphics.rectangle("fill", leftPanelX, leftPanelY, panelWidth, 20, 10, 10)
-    
-    -- 标题文字
-    love.graphics.setColor(0, 0, 0, 0.4)
-    love.graphics.print("RED TEAM", leftPanelX + 72, leftPanelY + 11, 0, 1.6, 1.6)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.print("RED TEAM", leftPanelX + 70, leftPanelY + 9, 0, 1.6, 1.6)
-    
-    -- 装饰三角形
-    love.graphics.setColor(1, 0.4, 0.4, 0.6)
-    love.graphics.polygon("fill", 
-        leftPanelX + 15, leftPanelY + 18,
-        leftPanelX + 25, leftPanelY + 13,
-        leftPanelX + 25, leftPanelY + 23)
-    
-    if debugInfo.redAlive then
-        local y = leftPanelY + 52
-        local lineH = 26
+    for i = 1, TEAM_COUNT do
+        local config = TEAM_CONFIGS[i]
+        local teamData = teams[config.name]
+        if not teamData or not teamData.base then
+            goto continue
+        end
         
-        -- 数据项（带图标和进度条）
+        local base = teamData.base
+        local alive, miners = countTeamUnits(teamData.units)
+        
+        -- 计算面板位置（右侧垂直排列）
+        local panelY = startY + (i - 1) * (panelHeight + spacing)
+        
+        -- 背景面板
+        love.graphics.setColor(0.02, 0.02, 0.15, 0.92)
+        love.graphics.rectangle("fill", panelX, panelY, panelWidth, panelHeight, 8, 8)
+        love.graphics.setColor(0.05, 0.05, 0.3, 0.5)
+        love.graphics.rectangle("fill", panelX, panelY, panelWidth, 36, 8, 8)
+        
+        -- 发光边框（使用队伍颜色）
+        love.graphics.setColor(config.color[1], config.color[2], config.color[3], 0.3)
+        love.graphics.setLineWidth(3)
+        love.graphics.rectangle("line", panelX - 1, panelY - 1, panelWidth + 2, panelHeight + 2, 8, 8)
+        love.graphics.setColor(config.color[1], config.color[2], config.color[3], 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", panelX, panelY, panelWidth, panelHeight, 8, 8)
+        love.graphics.setLineWidth(1)
+        
+        -- 标题栏
+        love.graphics.setColor(config.color[1] * 0.8, config.color[2] * 0.8, config.color[3] * 0.8)
+        love.graphics.rectangle("fill", panelX, panelY, panelWidth, 36, 8, 8)
+        love.graphics.setColor(config.color[1], config.color[2], config.color[3], 0.4)
+        love.graphics.rectangle("fill", panelX, panelY, panelWidth, 18, 8, 8)
+        
+        -- 标题文字（缩小字号）
+        love.graphics.setColor(0, 0, 0, 0.4)
+        love.graphics.print(config.displayName .. " TEAM", panelX + 45, panelY + 9, 0, 1.3, 1.3)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.print(config.displayName .. " TEAM", panelX + 43, panelY + 7, 0, 1.3, 1.3)
+        
+        -- 装饰三角形
+        love.graphics.setColor(config.color[1], config.color[2], config.color[3], 0.6)
+        love.graphics.polygon("fill", 
+            panelX + 12, panelY + 15,
+            panelX + 20, panelY + 11,
+            panelX + 20, panelY + 19)
+        
+        -- 数据显示（缩小字号和行距）
+        local y = panelY + 44
+        local lineH = 21
+        
         -- 单位数
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Units:", leftPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.75, 0.75, 0.75)
+        love.graphics.print("Units:", panelX + 12, y, 0, 0.85, 0.85)
         love.graphics.setColor(0.5, 1, 0.5)
-        love.graphics.print(string.format("%d/%d", debugInfo.redAlive, redBase.maxUnits), 
-            leftPanelX + 170, y, 0, 1.15, 1.15)
-        -- 进度条
-        local progress = debugInfo.redAlive / redBase.maxUnits
+        love.graphics.print(string.format("%d/%d", alive, base.maxUnits), 
+            panelX + 180, y, 0, 0.9, 0.9)
+        local progress = alive / base.maxUnits
         love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
-        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
+        love.graphics.rectangle("fill", panelX + 12, y + 13, panelWidth - 24, 3, 2, 2)
         love.graphics.setColor(0.5, 1, 0.5, 0.8)
-        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, (panelWidth - 30) * progress, 4, 2, 2)
+        love.graphics.rectangle("fill", panelX + 12, y + 13, (panelWidth - 24) * progress, 3, 2, 2)
         
         y = y + lineH
         -- 基地血量
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Base HP:", leftPanelX + 15, y, 0, 1.1, 1.1)
-        local hpPercent = (debugInfo.redBaseHP or 0) / redBase.maxHealth
+        love.graphics.setColor(0.75, 0.75, 0.75)
+        love.graphics.print("Base HP:", panelX + 12, y, 0, 0.85, 0.85)
+        local hpPercent = base.health / base.maxHealth
         if hpPercent > 0.6 then
             love.graphics.setColor(0.5, 1, 0.5)
         elseif hpPercent > 0.3 then
@@ -565,11 +777,9 @@ function love.draw()
         else
             love.graphics.setColor(1, 0.4, 0.4)
         end
-        love.graphics.print(string.format("%.0f%%", hpPercent * 100), 
-            leftPanelX + 170, y, 0, 1.15, 1.15)
-        -- 血条
+        love.graphics.print(string.format("%.0f%%", hpPercent * 100), panelX + 180, y, 0, 0.9, 0.9)
         love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
-        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
+        love.graphics.rectangle("fill", panelX + 12, y + 13, panelWidth - 24, 3, 2, 2)
         if hpPercent > 0.6 then
             love.graphics.setColor(0.3, 0.9, 0.3, 0.9)
         elseif hpPercent > 0.3 then
@@ -577,192 +787,37 @@ function love.draw()
         else
             love.graphics.setColor(1, 0.3, 0.3, 0.9)
         end
-        love.graphics.rectangle("fill", leftPanelX + 15, y + 18, (panelWidth - 30) * hpPercent, 4, 2, 2)
+        love.graphics.rectangle("fill", panelX + 12, y + 13, (panelWidth - 24) * hpPercent, 3, 2, 2)
         
         y = y + lineH
-        -- 兵营
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Barracks:", leftPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("%d/%d", #redBase.barracks, redBase.maxBarracks), 
-            leftPanelX + 170, y, 0, 1.15, 1.15)
-        
-        y = y + lineH
-        -- 防御塔
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Towers:", leftPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(1, 0.8, 0.5)
-        love.graphics.print(string.format("%d/%d", #redBase.towers, redBase.maxTowers), 
-            leftPanelX + 170, y, 0, 1.15, 1.15)
-        
-        y = y + lineH
-        -- 资源（带金币效果）
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Gold:", leftPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(1, 0.9, 0.1)
-        local goldAmount = math.floor(math.max(0, redBase.resources))
-        love.graphics.print(string.format("$%d", goldAmount), 
-            leftPanelX + 170, y, 0, 1.2, 1.2)
-        -- 金币闪烁效果
-        if goldAmount > 500 then
-            local pulse = math.sin(love.timer.getTime() * 3) * 0.3 + 0.7
-            love.graphics.setColor(1, 0.95, 0.3, pulse)
-            love.graphics.circle("fill", leftPanelX + 245, y + 8, 4)
-        end
-        
-        y = y + lineH
-        -- 战术模式（新增）
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Strategy:", leftPanelX + 15, y, 0, 1, 1)
-        local modeColors = {
-            economy = {0.2, 1, 0.5},
-            defensive = {0.5, 0.8, 1},
-            offensive = {1, 0.3, 0.3},
-            desperate = {1, 0.8, 0.1}
-        }
-        local modeColor = modeColors[redBase.strategy.mode] or {1, 1, 1}
-        love.graphics.setColor(modeColor)
-        love.graphics.print(redBase.strategy.mode:upper(), leftPanelX + 170, y, 0, 1, 1)
-        
-        y = y + lineH - 3
-        -- 保留金
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Reserved:", leftPanelX + 15, y, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.7, 0.2)
-        love.graphics.print(string.format("$%d", redBase.strategy.reservedGold), 
-            leftPanelX + 170, y, 0, 0.95, 0.95)
-    end
-    
-    -- 右侧蓝方信息面板（对称设计）
-    local rightPanelX = 1600 - panelWidth - 10
-    local rightPanelY = 65
-    
-    -- 蓝方背景面板
-    love.graphics.setColor(0.02, 0.02, 0.15, 0.92)
-    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, panelHeight, 10, 10)
-    love.graphics.setColor(0.05, 0.05, 0.3, 0.5)
-    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 45, 10, 10)
-    
-    -- 发光边框
-    love.graphics.setColor(0.2, 0.2, 1, 0.3)
-    love.graphics.setLineWidth(4)
-    love.graphics.rectangle("line", rightPanelX - 1, rightPanelY - 1, panelWidth + 2, panelHeight + 2, 10, 10)
-    love.graphics.setColor(0.3, 0.3, 1, 0.8)
-    love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", rightPanelX, rightPanelY, panelWidth, panelHeight, 10, 10)
-    love.graphics.setLineWidth(1)
-    
-    -- 蓝方标题栏
-    love.graphics.setColor(0.15, 0.15, 0.8)
-    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 42, 10, 10)
-    love.graphics.setColor(0.2, 0.2, 1, 0.4)
-    love.graphics.rectangle("fill", rightPanelX, rightPanelY, panelWidth, 20, 10, 10)
-    
-    -- 标题文字
-    love.graphics.setColor(0, 0, 0, 0.4)
-    love.graphics.print("BLUE TEAM", rightPanelX + 67, rightPanelY + 11, 0, 1.6, 1.6)
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.print("BLUE TEAM", rightPanelX + 65, rightPanelY + 9, 0, 1.6, 1.6)
-    
-    -- 装饰三角形
-    love.graphics.setColor(0.4, 0.4, 1, 0.6)
-    love.graphics.polygon("fill", 
-        rightPanelX + panelWidth - 15, rightPanelY + 18,
-        rightPanelX + panelWidth - 25, rightPanelY + 13,
-        rightPanelX + panelWidth - 25, rightPanelY + 23)
-    
-    if debugInfo.blueAlive then
-        local y = rightPanelY + 52
-        local lineH = 26
-        
-        -- 单位数
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Units:", rightPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.5, 1, 0.5)
-        love.graphics.print(string.format("%d/%d", debugInfo.blueAlive, blueBase.maxUnits), 
-            rightPanelX + 170, y, 0, 1.15, 1.15)
-        local progress = debugInfo.blueAlive / blueBase.maxUnits
-        love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
-        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
-        love.graphics.setColor(0.5, 1, 0.5, 0.8)
-        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, (panelWidth - 30) * progress, 4, 2, 2)
-        
-        y = y + lineH
-        -- 基地血量
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Base HP:", rightPanelX + 15, y, 0, 1.1, 1.1)
-        local hpPercent = (debugInfo.blueBaseHP or 0) / blueBase.maxHealth
-        if hpPercent > 0.6 then
-            love.graphics.setColor(0.5, 1, 0.5)
-        elseif hpPercent > 0.3 then
-            love.graphics.setColor(1, 1, 0.5)
-        else
-            love.graphics.setColor(1, 0.4, 0.4)
-        end
-        love.graphics.print(string.format("%.0f%%", hpPercent * 100), 
-            rightPanelX + 170, y, 0, 1.15, 1.15)
-        love.graphics.setColor(0.2, 0.2, 0.2, 0.6)
-        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, panelWidth - 30, 4, 2, 2)
-        if hpPercent > 0.6 then
-            love.graphics.setColor(0.3, 0.9, 0.3, 0.9)
-        elseif hpPercent > 0.3 then
-            love.graphics.setColor(1, 0.9, 0.3, 0.9)
-        else
-            love.graphics.setColor(1, 0.3, 0.3, 0.9)
-        end
-        love.graphics.rectangle("fill", rightPanelX + 15, y + 18, (panelWidth - 30) * hpPercent, 4, 2, 2)
-        
-        y = y + lineH
-        -- 兵营
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Barracks:", rightPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(0.7, 0.7, 1)
-        love.graphics.print(string.format("%d/%d", #blueBase.barracks, blueBase.maxBarracks), 
-            rightPanelX + 170, y, 0, 1.15, 1.15)
-        
-        y = y + lineH
-        -- 防御塔
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Towers:", rightPanelX + 15, y, 0, 1.1, 1.1)
-        love.graphics.setColor(1, 0.8, 0.5)
-        love.graphics.print(string.format("%d/%d", #blueBase.towers, blueBase.maxTowers), 
-            rightPanelX + 170, y, 0, 1.15, 1.15)
+        -- 建筑（缩小字号）
+        love.graphics.setColor(0.75, 0.75, 0.75)
+        love.graphics.print(string.format("Barracks: %d  Towers: %d", 
+            #base.barracks, #base.towers), panelX + 12, y, 0, 0.8, 0.8)
         
         y = y + lineH
         -- 资源
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Gold:", rightPanelX + 15, y, 0, 1.1, 1.1)
+        love.graphics.setColor(0.75, 0.75, 0.75)
+        love.graphics.print("Gold:", panelX + 12, y, 0, 0.85, 0.85)
         love.graphics.setColor(1, 0.9, 0.1)
-        local goldAmount = math.floor(math.max(0, blueBase.resources))
-        love.graphics.print(string.format("$%d", goldAmount), 
-            rightPanelX + 170, y, 0, 1.2, 1.2)
-        if goldAmount > 500 then
-            local pulse = math.sin(love.timer.getTime() * 3) * 0.3 + 0.7
-            love.graphics.setColor(1, 0.95, 0.3, pulse)
-            love.graphics.circle("fill", rightPanelX + 245, y + 8, 4)
-        end
+        love.graphics.print(string.format("$%d", math.floor(base.resources)), 
+            panelX + 180, y, 0, 0.9, 0.9)
         
         y = y + lineH
-        -- 战术模式（新增）
-        love.graphics.setColor(0.8, 0.8, 0.8)
-        love.graphics.print("Strategy:", rightPanelX + 15, y, 0, 1, 1)
+        -- 战术模式
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print("Strategy:", panelX + 12, y, 0, 0.8, 0.8)
         local modeColors = {
             economy = {0.2, 1, 0.5},
             defensive = {0.5, 0.8, 1},
             offensive = {1, 0.3, 0.3},
             desperate = {1, 0.8, 0.1}
         }
-        local modeColor = modeColors[blueBase.strategy.mode] or {1, 1, 1}
+        local modeColor = modeColors[base.strategy.mode] or {1, 1, 1}
         love.graphics.setColor(modeColor)
-        love.graphics.print(blueBase.strategy.mode:upper(), rightPanelX + 170, y, 0, 1, 1)
+        love.graphics.print(base.strategy.mode:upper(), panelX + 180, y, 0, 0.8, 0.8)
         
-        y = y + lineH - 3
-        -- 保留金
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print("Reserved:", rightPanelX + 15, y, 0, 0.9, 0.9)
-        love.graphics.setColor(1, 0.7, 0.2)
-        love.graphics.print(string.format("$%d", blueBase.strategy.reservedGold), 
-            rightPanelX + 170, y, 0, 0.95, 0.95)
+        ::continue::
     end
     
     -- 底部信息栏（现代设计）
@@ -799,11 +854,21 @@ function love.draw()
     love.graphics.setColor(0.7, 1, 0.8)
     love.graphics.print("CONTROLS:", 900, bottomBarY + 8, 0, 1, 1)
     love.graphics.setColor(0.85, 1, 0.9)
-    love.graphics.print("R-Click+Drag=Move | Wheel=Zoom | L-Click=Select | R=Restart", 
-        900, bottomBarY + 24, 0, 0.9, 0.9)
+    love.graphics.print("R-Click+Drag=Move | Wheel=Zoom | L-Click=Select | R=Restart | M=Minimap", 
+        900, bottomBarY + 24, 0, 0.85, 0.85)
     
-    -- 绘制小地图
-    Minimap.draw(redTeam, blueTeam, redBase, blueBase, resources, WORLD_WIDTH, WORLD_HEIGHT)
+    -- 绘制小地图（带开关）
+    if showMinimap then
+        Minimap.draw(teams, TEAM_COUNT, TEAM_CONFIGS, resources, WORLD_WIDTH, WORLD_HEIGHT)
+    else
+        -- 显示小地图关闭提示（左侧位置）
+        love.graphics.setColor(0.3, 0.3, 0.3, 0.6)
+        love.graphics.rectangle("fill", 20, 300, 200, 35, 5, 5)
+        love.graphics.setColor(0.6, 0.6, 0.6)
+        love.graphics.print("Minimap OFF", 60, 306, 0, 1, 1)
+        love.graphics.setColor(0.5, 0.5, 0.5)
+        love.graphics.print("Press M to toggle", 35, 321, 0, 0.75, 0.75)
+    end
     
     -- 绘制战斗提示
     BattleNotifications.draw()
@@ -1365,6 +1430,10 @@ function love.keypressed(key)
         selectedBarracks = nil
         frameCount = 0
         love.load()
+    elseif key == "m" then
+        -- 切换小地图显示
+        showMinimap = not showMinimap
+        print(string.format("Minimap %s", showMinimap and "ON" or "OFF"))
     elseif key == "escape" then
         love.event.quit()
     end
@@ -1406,89 +1475,74 @@ function love.mousepressed(x, y, button)
         end
         
         -- 检查是否点击了防御塔
-        for _, tower in ipairs(redBase.towers) do
-            if not tower.isDead then
-                local dx = worldX - tower.x
-                local dy = worldY - tower.y
-                local distance = math.sqrt(dx * dx + dy * dy)
-                if distance <= tower.size then
-                    selectedTower = tower
-                    return
-                end
-            end
-        end
-        
-        for _, tower in ipairs(blueBase.towers) do
-            if not tower.isDead then
-                local dx = worldX - tower.x
-                local dy = worldY - tower.y
-                local distance = math.sqrt(dx * dx + dy * dy)
-                if distance <= tower.size then
-                    selectedTower = tower
-                    return
+        for teamIdx = 1, TEAM_COUNT do
+            local config = TEAM_CONFIGS[teamIdx]
+            local teamData = teams[config.name]
+            local base = teamData.base
+            
+            if base then
+                for _, tower in ipairs(base.towers) do
+                    if not tower.isDead then
+                        local dx = worldX - tower.x
+                        local dy = worldY - tower.y
+                        local distance = math.sqrt(dx * dx + dy * dy)
+                        if distance <= tower.size then
+                            selectedTower = tower
+                            return
+                        end
+                    end
                 end
             end
         end
         
         -- 检查是否点击了兵营
-        for _, barracks in ipairs(redBase.barracks) do
-            if not barracks.isDead then
-                if worldX >= barracks.x - barracks.size/2 and worldX <= barracks.x + barracks.size/2 and
-                   worldY >= barracks.y - barracks.size/2 and worldY <= barracks.y + barracks.size/2 then
-                    selectedBarracks = barracks
-                    return
-                end
-            end
-        end
-        
-        for _, barracks in ipairs(blueBase.barracks) do
-            if not barracks.isDead then
-                if worldX >= barracks.x - barracks.size/2 and worldX <= barracks.x + barracks.size/2 and
-                   worldY >= barracks.y - barracks.size/2 and worldY <= barracks.y + barracks.size/2 then
-                    selectedBarracks = barracks
-                    return
+        for teamIdx = 1, TEAM_COUNT do
+            local config = TEAM_CONFIGS[teamIdx]
+            local teamData = teams[config.name]
+            local base = teamData.base
+            
+            if base then
+                for _, barracks in ipairs(base.barracks) do
+                    if not barracks.isDead then
+                        if worldX >= barracks.x - barracks.size/2 and worldX <= barracks.x + barracks.size/2 and
+                           worldY >= barracks.y - barracks.size/2 and worldY <= barracks.y + barracks.size/2 then
+                            selectedBarracks = barracks
+                            return
+                        end
+                    end
                 end
             end
         end
         
         -- 检查是否点击了基地
-        if redBase and not redBase.isDead then
-            if worldX >= redBase.x - redBase.size/2 and worldX <= redBase.x + redBase.size/2 and
-               worldY >= redBase.y - redBase.size/2 and worldY <= redBase.y + redBase.size/2 then
-                selectedBase = redBase
-                return
-            end
-        end
-        
-        if blueBase and not blueBase.isDead then
-            if worldX >= blueBase.x - blueBase.size/2 and worldX <= blueBase.x + blueBase.size/2 and
-               worldY >= blueBase.y - blueBase.size/2 and worldY <= blueBase.y + blueBase.size/2 then
-                selectedBase = blueBase
-                return
-            end
-        end
-        
-        -- 检查是否点击了某个角色
-        for _, agent in ipairs(redTeam) do
-            if not agent.isDead and agent.health > 0 then
-                local dx = worldX - agent.x
-                local dy = worldY - agent.y
-                local distance = math.sqrt(dx * dx + dy * dy)
-                if distance <= agent.radius then
-                    selectedAgent = agent
+        for teamIdx = 1, TEAM_COUNT do
+            local config = TEAM_CONFIGS[teamIdx]
+            local teamData = teams[config.name]
+            local base = teamData.base
+            
+            if base and not base.isDead then
+                if worldX >= base.x - base.size/2 and worldX <= base.x + base.size/2 and
+                   worldY >= base.y - base.size/2 and worldY <= base.y + base.size/2 then
+                    selectedBase = base
                     return
                 end
             end
         end
         
-        for _, agent in ipairs(blueTeam) do
-            if not agent.isDead and agent.health > 0 then
-                local dx = worldX - agent.x
-                local dy = worldY - agent.y
-                local distance = math.sqrt(dx * dx + dy * dy)
-                if distance <= agent.radius then
-                    selectedAgent = agent
-                    return
+        -- 检查是否点击了某个角色
+        for teamIdx = 1, TEAM_COUNT do
+            local config = TEAM_CONFIGS[teamIdx]
+            local teamData = teams[config.name]
+            
+            for _, agent in ipairs(teamData.units) do
+                if not agent.isDead and agent.health > 0 then
+                    local dx = worldX - agent.x
+                    local dy = worldY - agent.y
+                    local distance = math.sqrt(dx * dx + dy * dy)
+                    if distance <= agent.radius then
+                        selectedAgent = agent
+                        return
+                    end
                 end
             end
         end

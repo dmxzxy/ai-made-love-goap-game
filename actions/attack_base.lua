@@ -53,7 +53,12 @@ function AttackBase:perform(agent, dt)
         -- 攻击基地
         local isCrit = math.random() < agent.critChance
         local damage = agent.attackDamage
-        local actualDamage = agent.enemyBase:takeDamage(damage, isCrit)
+        
+        -- 对建筑物造成额外伤害 (50% bonus for bases)
+        local damageMultiplier = 1.5  -- 对基地的伤害提升50%
+        local finalDamage = damage * damageMultiplier
+        
+        local actualDamage = agent.enemyBase:takeDamage(finalDamage, isCrit)
         
         -- 创建攻击特效
         agent:createAttackEffect(agent.enemyBase.x, agent.enemyBase.y)
