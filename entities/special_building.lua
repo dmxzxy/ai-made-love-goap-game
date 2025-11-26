@@ -4,30 +4,119 @@ SpecialBuilding.__index = SpecialBuilding
 
 -- Special building types with unique abilities
 SpecialBuilding.types = {
-    ResearchLab = {
-        name = "Research Lab",
-        cost = 200,
-        buildTime = 8,
-        color = {0.4, 0.6, 0.9},
-        size = 30,
-        health = 350,
-        description = "Reduces tech research time by 25%",
-        effect = "researchSpeed",
-        effectValue = 0.25,
+    -- === 资源类建筑 ===
+    ResourceDepot = {
+        name = "Resource Depot",
+        cost = 120,
+        buildTime = 5,
+        color = {0.9, 0.8, 0.4},
+        size = 26,
+        health = 250,
+        description = "Increases resource storage by 30%",
+        effect = "storage",
+        effectValue = 0.30,
         radius = 0  -- Global effect
     },
-    MedicalStation = {
-        name = "Medical Station",
+    GoldMine = {
+        name = "Gold Mine",
+        cost = 200,
+        buildTime = 8,
+        color = {1, 0.9, 0.2},
+        size = 30,
+        health = 400,
+        description = "Generates 5 gold/sec passively",
+        effect = "passiveIncome",
+        effectValue = 5,
+        radius = 0
+    },
+    TradingPost = {
+        name = "Trading Post",
+        cost = 150,
+        buildTime = 6,
+        color = {0.8, 0.9, 0.6},
+        size = 28,
+        health = 280,
+        description = "Miners gather 40% more resources",
+        effect = "miningBonus",
+        effectValue = 0.40,
+        radius = 0
+    },
+    Refinery = {
+        name = "Refinery",
         cost = 180,
         buildTime = 7,
-        color = {0.3, 0.9, 0.5},
-        size = 28,
-        health = 300,
-        description = "Nearby units regenerate 2 HP/sec",
-        effect = "areaRegen",
-        effectValue = 2,
-        radius = 300
+        color = {0.7, 0.8, 0.9},
+        size = 32,
+        health = 320,
+        description = "Converts resources to gold 20% faster",
+        effect = "refinerySpeed",
+        effectValue = 0.20,
+        radius = 0
     },
+    
+    -- === 防御类建筑 ===
+    Fortress = {
+        name = "Fortress",
+        cost = 300,
+        buildTime = 12,
+        color = {0.5, 0.5, 0.5},
+        size = 38,
+        health = 600,
+        description = "Nearby units gain +20% health and armor",
+        effect = "areaDefense",
+        effectValue = 0.20,
+        radius = 400
+    },
+    Bunker = {
+        name = "Bunker",
+        cost = 250,
+        buildTime = 10,
+        color = {0.4, 0.4, 0.3},
+        size = 35,
+        health = 500,
+        description = "Nearby units gain +25% defense",
+        effect = "armorBoost",
+        effectValue = 0.25,
+        radius = 350
+    },
+    Watchtower = {
+        name = "Watchtower",
+        cost = 180,
+        buildTime = 7,
+        color = {0.6, 0.6, 0.8},
+        size = 28,
+        health = 350,
+        description = "Increases vision range and attack range by 30%",
+        effect = "visionRange",
+        effectValue = 0.30,
+        radius = 450
+    },
+    ShieldGenerator = {
+        name = "Shield Generator",
+        cost = 350,
+        buildTime = 14,
+        color = {0.3, 0.7, 1},
+        size = 32,
+        health = 450,
+        description = "Creates protective shield, absorbs 30% damage",
+        effect = "shieldAbsorb",
+        effectValue = 0.30,
+        radius = 400
+    },
+    Barricade = {
+        name = "Barricade",
+        cost = 100,
+        buildTime = 4,
+        color = {0.6, 0.5, 0.4},
+        size = 30,
+        health = 800,
+        description = "High health defensive wall, slows enemies",
+        effect = "slowEnemies",
+        effectValue = 0.20,
+        radius = 150
+    },
+    
+    -- === 军事类建筑 ===
     Arsenal = {
         name = "Arsenal",
         cost = 250,
@@ -52,29 +141,105 @@ SpecialBuilding.types = {
         effectValue = 0.20,
         radius = 0  -- Global effect
     },
-    Fortress = {
-        name = "Fortress",
-        cost = 300,
-        buildTime = 12,
-        color = {0.5, 0.5, 0.5},
+    WarFactory = {
+        name = "War Factory",
+        cost = 280,
+        buildTime = 11,
+        color = {0.8, 0.3, 0.3},
+        size = 36,
+        health = 420,
+        description = "Units spawn with +30% attack damage",
+        effect = "spawnDamageBonus",
+        effectValue = 0.30,
+        radius = 0
+    },
+    CommandCenter = {
+        name = "Command Center",
+        cost = 320,
+        buildTime = 13,
+        color = {0.5, 0.6, 0.9},
         size = 38,
-        health = 600,
-        description = "Nearby units gain +20% health and armor",
-        effect = "areaDefense",
-        effectValue = 0.20,
+        health = 480,
+        description = "Increases max unit cap by 10",
+        effect = "unitCapBonus",
+        effectValue = 10,
+        radius = 0
+    },
+    
+    -- === 科研类建筑 ===
+    ResearchLab = {
+        name = "Research Lab",
+        cost = 200,
+        buildTime = 8,
+        color = {0.4, 0.6, 0.9},
+        size = 30,
+        health = 350,
+        description = "Reduces tech research time by 25%",
+        effect = "researchSpeed",
+        effectValue = 0.25,
+        radius = 0  -- Global effect
+    },
+    TechCenter = {
+        name = "Tech Center",
+        cost = 400,
+        buildTime = 15,
+        color = {0.6, 0.3, 0.9},
+        size = 35,
+        health = 400,
+        description = "Unlocks advanced units and upgrades",
+        effect = "advancedTech",
+        effectValue = 1,
+        radius = 0
+    },
+    
+    -- === 支援类建筑 ===
+    MedicalStation = {
+        name = "Medical Station",
+        cost = 180,
+        buildTime = 7,
+        color = {0.3, 0.9, 0.5},
+        size = 28,
+        health = 300,
+        description = "Nearby units regenerate 2 HP/sec",
+        effect = "areaRegen",
+        effectValue = 2,
+        radius = 300
+    },
+    RepairBay = {
+        name = "Repair Bay",
+        cost = 160,
+        buildTime = 6,
+        color = {0.4, 0.8, 0.7},
+        size = 30,
+        health = 320,
+        description = "Buildings and towers regenerate 5 HP/sec",
+        effect = "structureRegen",
+        effectValue = 5,
         radius = 400
     },
-    ResourceDepot = {
-        name = "Resource Depot",
-        cost = 120,
+    SupplyDepot = {
+        name = "Supply Depot",
+        cost = 140,
         buildTime = 5,
-        color = {0.9, 0.8, 0.4},
+        color = {0.7, 0.7, 0.6},
         size = 26,
-        health = 250,
-        description = "Increases resource storage by 30%",
-        effect = "storage",
-        effectValue = 0.30,
-        radius = 0  -- Global effect
+        health = 300,
+        description = "Nearby units have 15% faster move speed",
+        effect = "speedBoost",
+        effectValue = 0.15,
+        radius = 350
+    },
+    PowerPlant = {
+        name = "Power Plant",
+        cost = 220,
+        buildTime = 9,
+        color = {0.9, 0.9, 0.3},
+        size = 32,
+        health = 380,
+        description = "Reduces all building costs by 10%",
+        effect = "costReduction",
+        effectValue = 0.10,
+        radius = 0
     }
 }
 
@@ -185,20 +350,32 @@ function SpecialBuilding.draw(self, offsetX, offsetY)
         -- Icon/Symbol
         love.graphics.setColor(1, 1, 1, 0.9)
         local iconText = ""
-        if self.buildingType == "ResearchLab" then
-            iconText = "R"
-        elseif self.buildingType == "MedicalStation" then
-            iconText = "+"
-        elseif self.buildingType == "Arsenal" then
-            iconText = "A"
-        elseif self.buildingType == "TrainingGround" then
-            iconText = "T"
-        elseif self.buildingType == "Fortress" then
-            iconText = "F"
-        elseif self.buildingType == "ResourceDepot" then
-            iconText = "D"
+        -- 资源类
+        if self.buildingType == "ResourceDepot" then iconText = "D"
+        elseif self.buildingType == "GoldMine" then iconText = "$"
+        elseif self.buildingType == "TradingPost" then iconText = "T"
+        elseif self.buildingType == "Refinery" then iconText = "Rf"
+        -- 防御类
+        elseif self.buildingType == "Fortress" then iconText = "F"
+        elseif self.buildingType == "Bunker" then iconText = "B"
+        elseif self.buildingType == "Watchtower" then iconText = "W"
+        elseif self.buildingType == "ShieldGenerator" then iconText = "S"
+        elseif self.buildingType == "Barricade" then iconText = "||"
+        -- 军事类
+        elseif self.buildingType == "Arsenal" then iconText = "A"
+        elseif self.buildingType == "TrainingGround" then iconText = "Tr"
+        elseif self.buildingType == "WarFactory" then iconText = "W"
+        elseif self.buildingType == "CommandCenter" then iconText = "C"
+        -- 科研类
+        elseif self.buildingType == "ResearchLab" then iconText = "R"
+        elseif self.buildingType == "TechCenter" then iconText = "TC"
+        -- 支援类
+        elseif self.buildingType == "MedicalStation" then iconText = "+"
+        elseif self.buildingType == "RepairBay" then iconText = "Rp"
+        elseif self.buildingType == "SupplyDepot" then iconText = "Sp"
+        elseif self.buildingType == "PowerPlant" then iconText = "P"
         end
-        love.graphics.print(iconText, x - 6, y - 10, 0, 1.8, 1.8)
+        love.graphics.print(iconText, x - 8, y - 8, 0, 1.2, 1.2)
     end
     
     -- Health bar

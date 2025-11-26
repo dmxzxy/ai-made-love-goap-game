@@ -498,6 +498,92 @@ function Base:getSpawnPosition()
     return self.x + offsetX, self.y + math.random(-30, 30)
 end
 
+-- AI决定是否建造特殊建筑
+function Base:shouldBuildSpecialBuilding(specialBuildings)
+    -- 如果资源不足或正在建造，不建造
+    if self.resources < 150 or self.isConstructing then
+        return nil
+    end
+    
+    -- 统计已有的特殊建筑类型
+    local myBuildings = {}
+    for _, building in ipairs(specialBuildings) do
+        if building.team == self.team and not building.isDead then
+            myBuildings[building.buildingType] = (myBuildings[building.buildingType] or 0) + 1
+        end
+    end
+    
+    local gameTime = love.timer.getTime() - self.strategy.startTime
+    
+    -- 经济模式：优先资源建筑
+    if self.strategy.mode == "economy" then
+        -- 早期建造金矿或贸易站
+        if gameTime > 30 and not myBuildings.GoldMine and self.resources >= 200 then
+            return "GoldMine"
+        end
+        if gameTime > 40 and not myBuildings.TradingPost and self.resources >= 150 then
+            return "TradingPost"
+        end
+        if gameTime > 50 and not myBuildings.ResourceDepot and self.resources >= 120 then
+            return "ResourceDepot"
+        end
+    end
+    
+    -- 防御模式：优先防御建筑
+    if self.strategy.mode == "defensive" then
+        if not myBuildings.Bunker and self.resources >= 250 then
+            return "Bunker"
+        end
+        if not myBuildings.Watchtower and self.resources >= 180 then
+            return "Watchtower"
+        end
+        if (myBuildings.Bunker or 0) >= 1 and not myBuildings.ShieldGenerator and self.resources >= 350 then
+            return "ShieldGenerator"
+        end
+        if not myBuildings.MedicalStation and self.resources >= 180 then
+            return "MedicalStation"
+        end
+    end
+    
+    -- 进攻模式：优先军事建筑
+    if self.strategy.mode == "offensive" then
+        if not myBuildings.Arsenal and self.resources >= 250 then
+            return "Arsenal"
+        end
+        if not myBuildings.WarFactory and self.resources >= 280 then
+            return "WarFactory"
+        end
+        if not myBuildings.CommandCenter and self.resources >= 320 then
+            return "CommandCenter"
+        end
+        if not myBuildings.TrainingGround and self.resources >= 150 then
+            return "TrainingGround"
+        end
+    end
+    
+    -- 绝境模式：建造修复和支援建筑
+    if self.strategy.mode == "desperate" then
+        if not myBuildings.RepairBay and self.resources >= 160 then
+            return "RepairBay"
+        end
+        if not myBuildings.MedicalStation and self.resources >= 180 then
+            return "MedicalStation"
+        end
+    end
+    
+    -- 后期：建造科技建筑
+    if gameTime > 120 then
+        if not myBuildings.ResearchLab and self.resources >= 200 then
+            return "ResearchLab"
+        end
+        if (myBuildings.ResearchLab or 0) >= 1 and not myBuildings.TechCenter and self.resources >= 400 then
+            return "TechCenter"
+        end
+    end
+    
+    return nil
+end
+
 -- 建造兵营
 function Base:buildBarracks(barracksType, Barracks)
     if #self.barracks >= self.maxBarracks then

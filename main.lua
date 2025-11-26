@@ -579,6 +579,14 @@ local function updateTeam(teamName, dt, Barracks, Tower)
         base:tryAutoBuildTower(Tower)
     end
     
+    -- AI自动建造特殊建筑（每10秒检查一次）
+    if frameCount % 600 == 200 then
+        local buildingType = base:shouldBuildSpecialBuilding(specialBuildings)
+        if buildingType then
+            tryBuildSpecialBuilding(base, buildingType)
+        end
+    end
+    
     -- 更新防御塔
     for i = #base.towers, 1, -1 do
         local tower = base.towers[i]
@@ -700,9 +708,46 @@ function love.update(dt)
         if building.isDead then
             table.remove(specialBuildings, i)
         elseif building.isComplete then
+            -- 被动收入效果（金矿、贸易站等）
+            if building.effect == "passiveIncome" then
+                local teamData = teams[building.team]
+                if teamData and teamData.base then
+                    teamData.base.resources = teamData.base.resources + building.effectValue * dt
+                end
+            end
+            
+            -- 建筑修复效果
+            if building.effect == "structureRegen" then
+                local teamData = teams[building.team]
+                if teamData and teamData.base then
+                    -- 修复基地
+                    if teamData.base.health < teamData.base.maxHealth then
+                        teamData.base.health = math.min(
+                            teamData.base.maxHealth,
+                            teamData.base.health + building.effectValue * dt
+                        )
+                    end
+                    
+                    -- 修复防御塔
+                    for _, tower in ipairs(teamData.base.towers) do
+                        if not tower.isDead and tower.health < tower.maxHealth then
+                            local dx = tower.x - building.x
+                            local dy = tower.y - building.y
+                            local distance = math.sqrt(dx * dx + dy * dy)
+                            if distance <= building.radius then
+                                tower.health = math.min(
+                                    tower.maxHealth,
+                                    tower.health + building.effectValue * dt
+                                )
+                            end
+                        end
+                    end
+                end
+            end
+            
             -- Apply effects to team units
             for _, teamData in pairs(teams) do
-                if teamData.units then
+                if teamData.units and teamData.config and teamData.config.name == building.team then
                     building:applyEffects(teamData.units)
                 end
             end
