@@ -176,14 +176,15 @@ function Tower:update(dt, enemies)
             local dist = math.sqrt(dx * dx + dy * dy)
             
             if dist <= self.range then
+                -- 持续伤害
+                self:dealDamage(self.laserTarget, self.damage * dt)
+                self.rotationAngle = math.atan2(dy, dx)
+                
                 self.laserTime = self.laserTime + 1
                 if self.laserTime >= self.attackSpeed then
                     self.laserTarget = nil
                     self.laserTime = 0
                 end
-                -- 持续伤害
-                self:dealDamage(self.laserTarget, self.damage * dt)
-                self.rotationAngle = math.atan2(dy, dx)
                 return
             else
                 self.laserTarget = nil
@@ -365,6 +366,11 @@ function Tower:attack(target, enemies)
 end
 
 function Tower:dealDamage(target, damage)
+    -- 安全检查：确保目标存在且未死亡
+    if not target or target.isDead then
+        return
+    end
+    
     target.health = target.health - damage
     self.damageDealt = self.damageDealt + damage
     

@@ -500,8 +500,12 @@ end
 
 -- AI决定是否建造特殊建筑
 function Base:shouldBuildSpecialBuilding(specialBuildings)
-    -- 如果资源不足或正在建造，不建造
-    if self.resources < 150 or self.isConstructing then
+    -- 如果资源不足或正在建造，不建造（降低门槛到100资源）
+    if self.resources < 100 then
+        return nil
+    end
+    
+    if self.isConstructing then
         return nil
     end
     
@@ -515,70 +519,120 @@ function Base:shouldBuildSpecialBuilding(specialBuildings)
     
     local gameTime = love.timer.getTime() - self.strategy.startTime
     
+    -- 建筑优先级评分系统
+    local priorities = {}
+    
+    -- 早期优先建造生产建筑（步兵工厂）
+    if gameTime > 10 and (myBuildings.InfantryFactory or 0) < 2 and self.resources >= 120 then
+        table.insert(priorities, {type = "InfantryFactory", score = 150})  -- 最高优先级
+    end
+    
     -- 经济模式：优先资源建筑
     if self.strategy.mode == "economy" then
-        -- 早期建造金矿或贸易站
-        if gameTime > 30 and not myBuildings.GoldMine and self.resources >= 200 then
-            return "GoldMine"
+        -- 早期建造金矿（允许多个）
+        if gameTime > 20 and (myBuildings.GoldMine or 0) < 3 and self.resources >= 200 then  -- 从2增加到3
+            table.insert(priorities, {type = "GoldMine", score = 100})
         end
-        if gameTime > 40 and not myBuildings.TradingPost and self.resources >= 150 then
-            return "TradingPost"
+        if gameTime > 30 and (myBuildings.TradingPost or 0) < 2 and self.resources >= 150 then  -- 从1增加到2
+            table.insert(priorities, {type = "TradingPost", score = 90})
         end
-        if gameTime > 50 and not myBuildings.ResourceDepot and self.resources >= 120 then
-            return "ResourceDepot"
+        if gameTime > 40 and (myBuildings.ResourceDepot or 0) < 2 and self.resources >= 120 then  -- 从1增加到2
+            table.insert(priorities, {type = "ResourceDepot", score = 80})
+        end
+        if gameTime > 50 and (myBuildings.Refinery or 0) < 1 and self.resources >= 180 then
+            table.insert(priorities, {type = "Refinery", score = 75})
+        end
+        -- 额外的生产建筑
+        if gameTime > 40 and (myBuildings.ScoutCamp or 0) < 1 and self.resources >= 110 then
+            table.insert(priorities, {type = "ScoutCamp", score = 70})
         end
     end
     
-    -- 防御模式：优先防御建筑
+    -- 防御模式：优先防御建筑（允许多个）
     if self.strategy.mode == "defensive" then
-        if not myBuildings.Bunker and self.resources >= 250 then
-            return "Bunker"
+        if (myBuildings.Bunker or 0) < 3 and self.resources >= 250 then  -- 从2增加到3
+            table.insert(priorities, {type = "Bunker", score = 95})
         end
-        if not myBuildings.Watchtower and self.resources >= 180 then
-            return "Watchtower"
+        if (myBuildings.Watchtower or 0) < 3 and self.resources >= 180 then  -- 从2增加到3
+            table.insert(priorities, {type = "Watchtower", score = 90})
         end
-        if (myBuildings.Bunker or 0) >= 1 and not myBuildings.ShieldGenerator and self.resources >= 350 then
-            return "ShieldGenerator"
+        if (myBuildings.Bunker or 0) >= 1 and (myBuildings.ShieldGenerator or 0) < 2 and self.resources >= 350 then  -- 从1增加到2
+            table.insert(priorities, {type = "ShieldGenerator", score = 85})
         end
-        if not myBuildings.MedicalStation and self.resources >= 180 then
-            return "MedicalStation"
+        if (myBuildings.MedicalStation or 0) < 2 and self.resources >= 180 then  -- 从1增加到2
+            table.insert(priorities, {type = "MedicalStation", score = 80})
+        end
+        if (myBuildings.Barricade or 0) < 3 and self.resources >= 100 then  -- 从2增加到3
+            table.insert(priorities, {type = "Barricade", score = 75})
+        end
+        if (myBuildings.Fortress or 0) < 1 and self.resources >= 300 then
+            table.insert(priorities, {type = "Fortress", score = 70})
+        end
+        -- 生产建筑
+        if gameTime > 30 and (myBuildings.SniperPost or 0) < 1 and self.resources >= 160 then
+            table.insert(priorities, {type = "SniperPost", score = 65})
         end
     end
     
-    -- 进攻模式：优先军事建筑
+    -- 进攻模式：优先军事建筑 + 生产建筑
     if self.strategy.mode == "offensive" then
-        if not myBuildings.Arsenal and self.resources >= 250 then
-            return "Arsenal"
+        if (myBuildings.Arsenal or 0) < 2 and self.resources >= 250 then  -- 从1增加到2
+            table.insert(priorities, {type = "Arsenal", score = 100})
         end
-        if not myBuildings.WarFactory and self.resources >= 280 then
-            return "WarFactory"
+        if (myBuildings.WarFactory or 0) < 2 and self.resources >= 280 then  -- 从1增加到2
+            table.insert(priorities, {type = "WarFactory", score = 95})
         end
-        if not myBuildings.CommandCenter and self.resources >= 320 then
-            return "CommandCenter"
+        if (myBuildings.CommandCenter or 0) < 1 and self.resources >= 320 then
+            table.insert(priorities, {type = "CommandCenter", score = 90})
         end
-        if not myBuildings.TrainingGround and self.resources >= 150 then
-            return "TrainingGround"
+        if (myBuildings.TrainingGround or 0) < 2 and self.resources >= 150 then  -- 从1增加到2
+            table.insert(priorities, {type = "TrainingGround", score = 85})
+        end
+        -- 生产建筑
+        if gameTime > 25 and (myBuildings.TankFactory or 0) < 1 and self.resources >= 200 then
+            table.insert(priorities, {type = "TankFactory", score = 80})
+        end
+        if gameTime > 35 and (myBuildings.GunnerArmory or 0) < 1 and self.resources >= 150 then
+            table.insert(priorities, {type = "GunnerArmory", score = 75})
         end
     end
     
     -- 绝境模式：建造修复和支援建筑
     if self.strategy.mode == "desperate" then
-        if not myBuildings.RepairBay and self.resources >= 160 then
-            return "RepairBay"
+        if (myBuildings.RepairBay or 0) < 3 and self.resources >= 160 then  -- 从2增加到3
+            table.insert(priorities, {type = "RepairBay", score = 100})
         end
-        if not myBuildings.MedicalStation and self.resources >= 180 then
-            return "MedicalStation"
+        if (myBuildings.MedicalStation or 0) < 3 and self.resources >= 180 then  -- 从2增加到3
+            table.insert(priorities, {type = "MedicalStation", score = 95})
         end
     end
     
     -- 后期：建造科技建筑
-    if gameTime > 120 then
-        if not myBuildings.ResearchLab and self.resources >= 200 then
-            return "ResearchLab"
+    if gameTime > 90 then
+        if (myBuildings.ResearchLab or 0) < 2 and self.resources >= 200 then  -- 从1增加到2
+            table.insert(priorities, {type = "ResearchLab", score = 70})
         end
-        if (myBuildings.ResearchLab or 0) >= 1 and not myBuildings.TechCenter and self.resources >= 400 then
-            return "TechCenter"
+        if (myBuildings.ResearchLab or 0) >= 1 and (myBuildings.TechCenter or 0) < 1 and self.resources >= 400 then
+            table.insert(priorities, {type = "TechCenter", score = 65})
         end
+    end
+    
+    -- 通用支援建筑（任何模式都可能需要）
+    if gameTime > 50 then
+        if (myBuildings.SupplyDepot or 0) < 2 and self.resources >= 140 then  -- 从1增加到2
+            table.insert(priorities, {type = "SupplyDepot", score = 60})
+        end
+        if (myBuildings.PowerPlant or 0) < 2 and self.resources >= 220 then  -- 从1增加到2
+            table.insert(priorities, {type = "PowerPlant", score = 55})
+        end
+    end
+    
+    -- 按优先级排序，选择得分最高的
+    if #priorities > 0 then
+        table.sort(priorities, function(a, b) return a.score > b.score end)
+        print(string.format("[%s] Attempting to build: %s (Resources: $%.0f, Time: %.1fs, Mode: %s)", 
+            self.team:upper(), priorities[1].type, self.resources, gameTime, self.strategy.mode:upper()))
+        return priorities[1].type
     end
     
     return nil
@@ -713,87 +767,105 @@ function Base:buildTower(towerType, Tower)
         return false
     end
     
+    -- 在领地范围内随机选择防御塔位置
+    local territoryRadius = 250  -- 防御塔领地半径（比建筑略小）
+    local minDistanceTower = 60  -- 塔之间的最小距离
+    local minDistanceBuilding = 50  -- 塔与建筑的最小距离
+    local minDistanceResource = 60  -- 塔与资源点的最小距离
+    local maxAttempts = 50
+    local towerX, towerY
+    local foundGoodSpot = false
+    
+    for attempt = 1, maxAttempts do
+        -- 在领地范围内随机位置
+        local angle = math.random() * math.pi * 2
+        local distance = math.random(100, territoryRadius)
+        local x = self.x + math.cos(angle) * distance
+        local y = self.y + math.sin(angle) * distance
+        
+        -- 确保在世界范围内
+        x = math.max(100, math.min(3100, x))  -- WORLD_WIDTH - 100
+        y = math.max(100, math.min(1700, y))  -- WORLD_HEIGHT - 100
+        
+        -- 检查是否与现有防御塔重叠
+        local overlaps = false
+        for _, tower in ipairs(self.towers) do
+            if not tower.isDead then
+                local dx = x - tower.x
+                local dy = y - tower.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < minDistanceTower then
+                    overlaps = true
+                    break
+                end
+            end
+        end
+        
+        -- 检查是否与特殊建筑重叠
+        if not overlaps then
+            -- 访问全局specialBuildings（需要在base.lua中访问）
+            local allBuildings = _G.specialBuildings or {}
+            for _, building in ipairs(allBuildings) do
+                if building.team == self.team and not building.isDead then
+                    local dx = x - building.x
+                    local dy = y - building.y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < minDistanceBuilding then
+                        overlaps = true
+                        break
+                    end
+                end
+            end
+        end
+        
+        -- 检查是否与资源点重叠
+        if not overlaps then
+            local allResources = _G.resources or {}
+            for _, resource in ipairs(allResources) do
+                local dx = x - resource.x
+                local dy = y - resource.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < minDistanceResource then
+                    overlaps = true
+                    break
+                end
+            end
+        end
+        
+        -- 检查是否与基地太近
+        if not overlaps then
+            local dxBase = x - self.x
+            local dyBase = y - self.y
+            local distBase = math.sqrt(dxBase * dxBase + dyBase * dyBase)
+            if distBase < 80 then
+                overlaps = true
+            end
+        end
+        
+        if not overlaps then
+            towerX = x
+            towerY = y
+            foundGoodSpot = true
+            break
+        end
+    end
+    
+    -- 如果找不到合适位置，建造失败
+    if not foundGoodSpot then
+        print(string.format("[%s] ⚠️ Cannot build tower - no valid position found (territory full or too crowded)", 
+            self.team:upper()))
+        return false  -- 不扣除资源
+    end
+    
     -- 扣除资源
     self.resources = math.max(0, self.resources - cost)
     
-    -- 智能防御塔布局：根据基地位置判断敌人方向
-    local towerCount = #self.towers
-    local angle, distance
-    
-    -- 判断基地位置（四个角落）
-    if self.x < 1200 and self.y < 600 then
-        -- 左上角（红队）- 敌人在右侧和下方，朝向右下
-        local angleOptions = {
-            0,                 -- 正右
-            math.pi / 4,       -- 右下45度
-            -math.pi / 4,      -- 右上45度
-            math.pi / 6,       -- 右下30度
-            -math.pi / 6,      -- 右上30度
-            math.pi / 2,       -- 正下
-            math.pi / 3,       -- 右下60度
-            -math.pi / 3,      -- 右上60度
-            -math.pi / 2       -- 正上
-        }
-        angle = angleOptions[(towerCount % #angleOptions) + 1]
-        distance = 120 + math.floor(towerCount / #angleOptions) * 40
-        
-    elseif self.x > 1200 and self.y < 600 then
-        -- 右上角（蓝队）- 敌人在左侧和下方，朝向左下
-        local angleOptions = {
-            math.pi,           -- 正左
-            math.pi - math.pi / 4,   -- 左下45度
-            math.pi + math.pi / 4,   -- 左上45度
-            math.pi - math.pi / 6,   -- 左下30度
-            math.pi + math.pi / 6,   -- 左上30度
-            -math.pi / 2,      -- 正下
-            math.pi - math.pi / 3,   -- 左下60度
-            math.pi + math.pi / 3,   -- 左上60度
-            math.pi / 2        -- 正上
-        }
-        angle = angleOptions[(towerCount % #angleOptions) + 1]
-        distance = 120 + math.floor(towerCount / #angleOptions) * 40
-        
-    elseif self.x < 1200 and self.y > 600 then
-        -- 左下角（绿队）- 敌人在右侧和上方，朝向右上
-        local angleOptions = {
-            0,                 -- 正右
-            -math.pi / 4,      -- 右上45度
-            math.pi / 4,       -- 右下45度
-            -math.pi / 6,      -- 右上30度
-            math.pi / 6,       -- 右下30度
-            -math.pi / 2,      -- 正上
-            -math.pi / 3,      -- 右上60度
-            math.pi / 3,       -- 右下60度
-            math.pi / 2        -- 正下
-        }
-        angle = angleOptions[(towerCount % #angleOptions) + 1]
-        distance = 120 + math.floor(towerCount / #angleOptions) * 40
-        
-    else
-        -- 右下角（黄队）- 敌人在左侧和上方，朝向左上
-        local angleOptions = {
-            math.pi,           -- 正左
-            math.pi + math.pi / 4,   -- 左上45度
-            math.pi - math.pi / 4,   -- 左下45度
-            math.pi + math.pi / 6,   -- 左上30度
-            math.pi - math.pi / 6,   -- 左下30度
-            -math.pi / 2,      -- 正上
-            math.pi + math.pi / 3,   -- 左上60度
-            math.pi - math.pi / 3,   -- 左下60度
-            math.pi / 2        -- 正下
-        }
-        angle = angleOptions[(towerCount % #angleOptions) + 1]
-        distance = 120 + math.floor(towerCount / #angleOptions) * 40
-    end
-    
-    local towerX = self.x + math.cos(angle) * distance
-    local towerY = self.y + math.sin(angle) * distance
-    
+    -- 创建防御塔
     local tower = Tower.new(towerX, towerY, self.team, towerType)
     table.insert(self.towers, tower)
     
-    print(string.format("[%s] Building %s tower at (%.0f, %.0f) [angle: %.0f deg], cost: %d, remaining: %.0f", 
-        self.team, towerType, towerX, towerY, math.deg(angle), cost, self.resources))
+    print(string.format("[%s] Built %s tower in territory at (%.0f, %.0f), cost: %d, remaining: %.0f", 
+        self.team:upper(), towerType, towerX, towerY, cost, self.resources))
     
     return true
 end

@@ -208,6 +208,18 @@ function Agent.new(x, y, team, color, unitClass)
     self.isDead = false
     self.regenEffect = 0  -- 恢复特效
     
+    -- 侦查系统
+    self.visionRange = 300  -- 基础视野范围
+    if unitClass == "Scout" then
+        self.visionRange = 500  -- 侦察兵视野更远
+    elseif unitClass == "Sniper" or unitClass == "Ranger" then
+        self.visionRange = 400  -- 远程单位视野较远
+    elseif unitClass == "Miner" then
+        self.visionRange = 250  -- 矿工视野较短
+    end
+    self.discoveredEnemies = {}  -- 已发现的敌人列表
+    self.lastDiscoveryTime = 0  -- 上次发现敌人的时间
+    
     -- 升级系统（老兵特效）
     self.kills = 0          -- 击杀数
     self.level = 1          -- 等级（1-5）
@@ -355,27 +367,81 @@ function Agent:update(dt)
         return  -- 矿工不使用GOAP系统
     end
     
-    -- 战斗反应：如果被攻击且没有目标，立即反击
-    if self.lastAttacker and (love.timer.getTime() - self.lastAttackedTime < 2) then
-        if not self.target or self.target.isDead or self.target.health <= 0 then
-            -- 检查攻击者是否还活着且在范围内
-            if not self.lastAttacker.isDead and self.lastAttacker.health > 0 then
-                local dx = self.lastAttacker.x - self.x
-                local dy = self.lastAttacker.y - self.y
-                local dist = math.sqrt(dx * dx + dy * dy)
-                
-                if dist <= self.aggroRadius then
+    -- 侦查系统：扫描视野范围内的敌人
+    if not self.isMiner then
+        self:updateVision()
+    end
+    
+    -- 初始化卡住检测变量
+    if not self.stuckCheckTimer then
+        self.stuckCheckTimer = 0
+        self.lastStuckCheckPos = {x = self.x, y = self.y}
+        self.consecutiveStuckChecks = 0
+    end
+    
+    -- 卡住检测：每0.5秒检查一次位置
+    self.stuckCheckTimer = self.stuckCheckTimer + dt
+    if self.stuckCheckTimer >= 0.5 then
+        local dx = self.x - self.lastStuckCheckPos.x
+        local dy = self.y - self.lastStuckCheckPos.y
+        local moveDist = math.sqrt(dx * dx + dy * dy)
+        
+        -- 如果有目标但移动距离很小（< 5像素），认为可能卡住
+        if self.target and moveDist < 5 and not self.isAttacking then
+            self.consecutiveStuckChecks = self.consecutiveStuckChecks + 1
+            
+            -- 连续3次检测到卡住（1.5秒），强制重新选择目标
+            if self.consecutiveStuckChecks >= 3 then
+                print(string.format("[%s %s] Stuck detected! Switching target...", self.team, self.unitClass))
+                self:reevaluateTarget()
+                self.consecutiveStuckChecks = 0  -- 重置计数
+                self.currentPlan = nil  -- 重新规划
+            end
+        else
+            self.consecutiveStuckChecks = 0  -- 移动正常，重置计数
+        end
+        
+        -- 更新检查位置
+        self.lastStuckCheckPos.x = self.x
+        self.lastStuckCheckPos.y = self.y
+        self.stuckCheckTimer = 0
+    end
+    
+    -- 战斗反应：被攻击时立即反击（更强的反应）
+    if self.lastAttacker and (love.timer.getTime() - self.lastAttackedTime < 3) then
+        if not self.lastAttacker.isDead and self.lastAttacker.health > 0 then
+            local dx = self.lastAttacker.x - self.x
+            local dy = self.lastAttacker.y - self.y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            
+            -- 攻击者在范围内
+            if dist <= self.aggroRadius then
+                -- 如果没有目标，立即反击
+                if not self.target or self.target.isDead or self.target.health <= 0 then
                     self.target = self.lastAttacker
-                    self.currentPlan = nil  -- 重新规划
+                    self.currentPlan = nil
                     print(string.format("[%s %s] Counter-attacking attacker!", self.team, self.unitClass))
+                else
+                    -- 即使有目标，如果攻击者更近，也切换目标
+                    local currentDx = self.target.x - self.x
+                    local currentDy = self.target.y - self.y
+                    local currentDist = math.sqrt(currentDx * currentDx + currentDy * currentDy)
+                    
+                    -- 攻击者比当前目标近80px以上，立即切换
+                    if dist < currentDist - 80 then
+                        self.target = self.lastAttacker
+                        self.currentPlan = nil
+                        print(string.format("[%s %s] Switching to closer attacker! (%.0f < %.0f)", 
+                            self.team, self.unitClass, dist, currentDist))
+                    end
                 end
             end
         end
     end
     
-    -- 实时目标重新评估：定期检查是否有更近的目标
+    -- 实时目标重新评估：更频繁检查（每0.8秒）
     self.targetReevalTimer = (self.targetReevalTimer or 0) + dt
-    if self.targetReevalTimer >= 1.5 then  -- 每1.5秒重新评估一次
+    if self.targetReevalTimer >= 0.8 then  -- 从1.5秒改为0.8秒，更快响应
         self.targetReevalTimer = 0
         self:reevaluateTarget()
     end
@@ -428,47 +494,77 @@ end
 
 -- 处理单位间碰撞
 function Agent:handleCollisions(dt)
-    -- 与盟友的碰撞
+    local totalPushX = 0
+    local totalPushY = 0
+    local collisionCount = 0
+    
+    -- 与盟友的碰撞（更强的推力）
     for _, ally in ipairs(self.allies) do
         if ally ~= self and not ally.isDead and ally.health > 0 then
             local dx = self.x - ally.x
             local dy = self.y - ally.y
             local distance = math.sqrt(dx * dx + dy * dy)
-            local minDistance = self.radius + ally.radius
+            local minDistance = self.radius + ally.radius + 5  -- 增加最小间距
             
             if distance < minDistance and distance > 0 then
-                -- 计算推开力
+                -- 计算推开力（提高推力）
                 local overlap = minDistance - distance
-                local pushX = (dx / distance) * overlap * 0.5
-                local pushY = (dy / distance) * overlap * 0.5
+                local pushStrength = 1.2  -- 从0.5提高到1.2
+                local pushX = (dx / distance) * overlap * pushStrength
+                local pushY = (dy / distance) * overlap * pushStrength
                 
-                -- 推开双方
-                self.x = self.x + pushX
-                self.y = self.y + pushY
-                ally.x = ally.x - pushX
-                ally.y = ally.y - pushY
+                -- 累积推力
+                totalPushX = totalPushX + pushX
+                totalPushY = totalPushY + pushY
+                collisionCount = collisionCount + 1
+                
+                -- 也推开盟友（互相推）
+                if not ally.isAttacking then  -- 攻击中的单位不被推动
+                    ally.x = ally.x - pushX * 0.5
+                    ally.y = ally.y - pushY * 0.5
+                end
             end
         end
     end
     
-    -- 与敌人的碰撞（轻微推开，防止重叠）
+    -- 与敌人的碰撞（中等推力）
     for _, enemy in ipairs(self.enemies) do
         if not enemy.isDead and enemy.health > 0 then
             local dx = self.x - enemy.x
             local dy = self.y - enemy.y
             local distance = math.sqrt(dx * dx + dy * dy)
-            local minDistance = self.radius + enemy.radius
+            local minDistance = self.radius + enemy.radius + 3
             
             if distance < minDistance and distance > 0 then
-                -- 计算推开力（敌人碰撞推力更小）
+                -- 计算推开力
                 local overlap = minDistance - distance
-                local pushX = (dx / distance) * overlap * 0.3
-                local pushY = (dy / distance) * overlap * 0.3
+                local pushStrength = 0.8  -- 从0.3提高到0.8
+                local pushX = (dx / distance) * overlap * pushStrength
+                local pushY = (dy / distance) * overlap * pushStrength
                 
-                self.x = self.x + pushX
-                self.y = self.y + pushY
+                totalPushX = totalPushX + pushX
+                totalPushY = totalPushY + pushY
+                collisionCount = collisionCount + 1
             end
         end
+    end
+    
+    -- 应用累积的推力
+    if collisionCount > 0 then
+        self.x = self.x + totalPushX
+        self.y = self.y + totalPushY
+        
+        -- 如果碰撞太多，标记为拥堵
+        if collisionCount >= 4 then
+            self.isCrowded = true
+            self.crowdedTimer = (self.crowdedTimer or 0) + dt
+        else
+            self.isCrowded = false
+            self.crowdedTimer = 0
+        end
+    else
+        self.isCrowded = false
+        self.crowdedTimer = 0
     end
     
     -- 无边界限制 - 单位可以移动到任何位置
@@ -586,11 +682,18 @@ function Agent:reevaluateTarget()
                 -- 计算目标优先级分数
                 local score = 0
                 
-                -- 1. 距离因素（越近越好）- 权重最高
+                -- 1. 距离因素（越近越好）- 大幅提高权重
                 local distScore = 1000 / (dist + 10)
-                score = score + distScore * 2.5
+                score = score + distScore * 3.5  -- 从2.5提高到3.5，让距离影响更大
                 
-                -- 2. 血量因素（优先攻击残血目标）
+                -- 2. 极近目标加成 - 100px内的目标获得额外分数
+                if dist < 100 then
+                    score = score + 150  -- 新增：非常近的目标高优先级
+                elseif dist < 200 then
+                    score = score + 80   -- 新增：较近的目标中等加成
+                end
+                
+                -- 3. 血量因素（优先攻击残血目标）
                 local hpPercent = enemy.health / enemy.maxHealth
                 if hpPercent < 0.3 then
                     score = score + 80  -- 残血目标高优先级
@@ -598,7 +701,7 @@ function Agent:reevaluateTarget()
                     score = score + 40
                 end
                 
-                -- 3. 单位类型优先级
+                -- 4. 单位类型优先级
                 if enemy.unitClass == "Healer" then
                     score = score + 100  -- 优先击杀治疗
                 elseif enemy.unitClass == "Sniper" then
@@ -607,19 +710,19 @@ function Agent:reevaluateTarget()
                     score = score + 30  -- 矿工次优先
                 end
                 
-                -- 4. 威胁等级（高攻击力的敌人）
+                -- 5. 威胁等级（高攻击力的敌人）
                 if enemy.attackDamage > 20 then
                     score = score + 50
                 end
                 
-                -- 5. 当前目标粘性（避免频繁切换）
+                -- 6. 当前目标粘性（降低粘性，让切换更容易）
                 if self.target == enemy then
-                    score = score + 60  -- 保持当前目标的倾向
+                    score = score + 40  -- 从60降低到40，减少切换阻力
                 end
                 
-                -- 6. 正在攻击我的敌人优先级更高
+                -- 7. 正在攻击我的敌人优先级大幅提高
                 if enemy == self.lastAttacker then
-                    score = score + 100
+                    score = score + 180  -- 从100提高到180，更积极反击
                 end
                 
                 if score > bestScore then
@@ -1426,6 +1529,68 @@ function Agent:updateMinerBehavior(dt)
                 self.x = self.x + math.cos(angle) * self.moveSpeed * dt
                 self.y = self.y + math.sin(angle) * self.moveSpeed * dt
                 self.angle = angle
+            end
+        end
+    end
+end
+
+-- 侦查系统：扫描视野范围内的敌人
+function Agent:updateVision()
+    if not self.enemies then return end
+    
+    local currentTime = love.timer.getTime()
+    
+    -- 扫描视野范围内的敌人
+    for _, enemy in ipairs(self.enemies) do
+        if not enemy.isDead and enemy.health > 0 then
+            local dx = enemy.x - self.x
+            local dy = enemy.y - self.y
+            local distance = math.sqrt(dx * dx + dy * dy)
+            
+            -- 在视野范围内
+            if distance <= self.visionRange then
+                if not self.discoveredEnemies[enemy] then
+                    -- 首次发现敌人
+                    self.discoveredEnemies[enemy] = true
+                    self.lastDiscoveryTime = currentTime
+                    
+                    -- 通知队伍发现敌人（可以触发警报或共享视野）
+                    if _G.teams and _G.teams[self.team] then
+                        local teamData = _G.teams[self.team]
+                        if not teamData.discoveredEnemies then
+                            teamData.discoveredEnemies = {}
+                        end
+                        if not teamData.discoveredEnemies[enemy.team] then
+                            teamData.discoveredEnemies[enemy.team] = currentTime
+                            print(string.format("[%s] Discovered enemy team: %s!", self.team:upper(), enemy.team:upper()))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 扫描敌方基地
+    if self.enemyBases then
+        for _, base in ipairs(self.enemyBases) do
+            if not base.isDead then
+                local dx = base.x - self.x
+                local dy = base.y - self.y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                
+                if distance <= self.visionRange then
+                    -- 发现敌方基地
+                    if _G.teams and _G.teams[self.team] then
+                        local teamData = _G.teams[self.team]
+                        if not teamData.discoveredEnemies then
+                            teamData.discoveredEnemies = {}
+                        end
+                        if not teamData.discoveredEnemies[base.team] then
+                            teamData.discoveredEnemies[base.team] = currentTime
+                            print(string.format("[%s] Discovered enemy base: %s!", self.team:upper(), base.team:upper()))
+                        end
+                    end
+                end
             end
         end
     end

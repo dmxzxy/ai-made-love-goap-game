@@ -2,7 +2,6 @@
 local Agent = require("entities.agent")
 local Base = require("entities.base")
 local Resource = require("entities.resource")
-local Barracks = require("entities.barracks")
 local Tower = require("entities.tower")
 local SpecialBuilding = require("entities.special_building")
 local Particles = require("effects.particles")
@@ -33,7 +32,6 @@ local frameCount = 0
 local debugInfo = {}
 local selectedAgent = nil
 local selectedBase = nil
-local selectedBarracks = nil
 local selectedTower = nil
 local selectedSpecialBuilding = nil
 local showMinimap = true  -- 小地图显示开关
@@ -459,9 +457,39 @@ local function countTeamUnits(teamUnits)
 end
 
 -- 辅助函数：更新单个队伍
-local function updateTeam(teamName, dt, Barracks, Tower)
+local function updateTeam(teamName, dt, Tower)
     local teamData = teams[teamName]
-    if not teamData or teamData.base.isDead then
+    if not teamData then
+        return
+    end
+    
+    -- 检查基地是否刚刚死亡
+    if teamData.base.isDead then
+        -- 如果这是基地刚死亡的第一帧，清理所有残存单位
+        if not teamData.baseDeadHandled then
+            teamData.baseDeadHandled = true
+            local unitCount = #teamData.units
+            
+            if unitCount > 0 then
+                print(string.format("⚠️  [%s] Base destroyed! Eliminating %d remaining units...", 
+                    teamName:upper(), unitCount))
+                
+                -- 标记所有单位为死亡
+                for _, unit in ipairs(teamData.units) do
+                    if not unit.isDead then
+                        unit.isDead = true
+                        unit.health = 0
+                        
+                        -- 添加死亡粒子效果
+                        if Particles and Particles.createExplosion then
+                            Particles.createExplosion(unit.x, unit.y, unit.color)
+                        end
+                    end
+                end
+                
+                print(string.format("✓ [%s] All units eliminated!", teamName:upper()))
+            end
+        end
         return
     end
     
@@ -571,16 +599,13 @@ local function updateTeam(teamName, dt, Barracks, Tower)
             teamData.config.displayName, unitClass, alive + 1, miners, base.strategy.mode:upper()))
     end
     
-    -- 自动建造兵营和防御塔
-    if frameCount % 300 == 0 then
-        base:tryAutoBuildBarracks(Barracks)
-    end
+    -- 自动建造防御塔
     if frameCount % 600 == 100 then
         base:tryAutoBuildTower(Tower)
     end
     
-    -- AI自动建造特殊建筑（每10秒检查一次）
-    if frameCount % 600 == 200 then
+    -- AI自动建造特殊建筑（每5秒检查一次）- 包括生产建筑
+    if frameCount % 300 == 200 then
         local buildingType = base:shouldBuildSpecialBuilding(specialBuildings)
         if buildingType then
             tryBuildSpecialBuilding(base, buildingType)
@@ -606,52 +631,55 @@ local function updateTeam(teamName, dt, Barracks, Tower)
         end
     end
     
-    -- 更新兵营生产
-    for i, barracks in ipairs(base.barracks) do
-        local shouldSpawn, unitType, cost = barracks:update(dt, base.resources)
-        local availableGold = math.max(0, base.resources - base.strategy.reservedGold)
-        if shouldSpawn and unitType and alive < base.maxUnits and availableGold >= cost then
-            base.resources = math.max(0, base.resources - cost)
-            battleStats[teamName].goldSpent = battleStats[teamName].goldSpent + cost
-            local x, y = barracks:getSpawnPosition()
-            local agent = Agent.new(x, y, teamName, teamData.config.color, unitType)
+    -- 从特殊建筑生产单位 (替代原Barracks系统)
+    for _, building in ipairs(specialBuildings) do
+        if building.team == teamName and building.producesUnit then
+            local availableGold = math.max(0, base.resources - base.strategy.reservedGold)
+            local shouldSpawn, unitType, cost = building:checkProduction(availableGold)
             
-            -- 应用指挥官加成
-            if base.commanderData then
-                Commander.applyToUnit(agent, base.commanderData)
-            end
-            
-            local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
-            agent.angle = math.atan2(centerY - y, centerX - x)
-            
-            agent.myBase = base
-            agent.resources = resources
-            agent.allies = units
-            agent.enemies = {}
-            agent.enemyBases = {}
-            agent.enemyTowers = {}
-            for otherIdx = 1, TEAM_COUNT do
-                if TEAM_CONFIGS[otherIdx].name ~= teamName then
-                    local otherTeam = teams[TEAM_CONFIGS[otherIdx].name]
-                    for _, enemy in ipairs(otherTeam.units) do
-                        table.insert(agent.enemies, enemy)
-                    end
-                    table.insert(agent.enemyBases, otherTeam.base)
-                    for _, tower in ipairs(otherTeam.base.towers) do
-                        table.insert(agent.enemyTowers, tower)
+            if shouldSpawn and unitType and alive < base.maxUnits then
+                base.resources = math.max(0, base.resources - cost)
+                battleStats[teamName].goldSpent = battleStats[teamName].goldSpent + cost
+                local x, y = building:getSpawnPosition()
+                local agent = Agent.new(x, y, teamName, teamData.config.color, unitType)
+                
+                -- 应用指挥官加成
+                if base.commanderData then
+                    Commander.applyToUnit(agent, base.commanderData)
+                end
+                
+                local centerX, centerY = WORLD_WIDTH / 2, WORLD_HEIGHT / 2
+                agent.angle = math.atan2(centerY - y, centerX - x)
+                
+                agent.myBase = base
+                agent.resources = resources
+                agent.allies = units
+                agent.enemies = {}
+                agent.enemyBases = {}
+                agent.enemyTowers = {}
+                for otherIdx = 1, TEAM_COUNT do
+                    if TEAM_CONFIGS[otherIdx].name ~= teamName then
+                        local otherTeam = teams[TEAM_CONFIGS[otherIdx].name]
+                        for _, enemy in ipairs(otherTeam.units) do
+                            table.insert(agent.enemies, enemy)
+                        end
+                        table.insert(agent.enemyBases, otherTeam.base)
+                        for _, tower in ipairs(otherTeam.base.towers) do
+                            table.insert(agent.enemyTowers, tower)
+                        end
                     end
                 end
+                if #agent.enemyBases > 0 then
+                    -- 随机选择一个敌方基地作为初始目标，避免总是攻击同一队伍
+                    local randomIndex = math.random(1, #agent.enemyBases)
+                    agent.enemyBase = agent.enemyBases[randomIndex]
+                end
+                
+                table.insert(units, agent)
+                battleStats[teamName].unitsProduced = battleStats[teamName].unitsProduced + 1
+                print(string.format("★ [%s %s] %s spawned! Total: %d ★", 
+                    teamData.config.displayName, building.name, unitType, alive + 1))
             end
-            if #agent.enemyBases > 0 then
-                -- 随机选择一个敌方基地作为初始目标，避免总是攻击同一队伍
-                local randomIndex = math.random(1, #agent.enemyBases)
-                agent.enemyBase = agent.enemyBases[randomIndex]
-            end
-            
-            table.insert(units, agent)
-            battleStats[teamName].unitsProduced = battleStats[teamName].unitsProduced + 1
-            print(string.format("[%s Barracks %d] %s spawned! Total: %d", 
-                teamData.config.displayName, i, unitType, alive + 1))
         end
     end
     
@@ -706,20 +734,48 @@ function love.update(dt)
         
         -- Remove dead buildings
         if building.isDead then
+            print(string.format("[%s] Lost building: %s", building.team:upper(), building.name))
             table.remove(specialBuildings, i)
         elseif building.isComplete then
-            -- 被动收入效果（金矿、贸易站等）
-            if building.effect == "passiveIncome" then
-                local teamData = teams[building.team]
-                if teamData and teamData.base then
+            local teamData = teams[building.team]
+            if teamData and teamData.base then
+                
+                -- 被动收入效果（金矿）
+                if building.effect == "passiveIncome" then
                     teamData.base.resources = teamData.base.resources + building.effectValue * dt
+                    -- 每2秒显示一次收入提示
+                    if not building.incomeTimer then building.incomeTimer = 0 end
+                    building.incomeTimer = building.incomeTimer + dt
+                    if building.incomeTimer >= 2 then
+                        building.incomeTimer = 0
+                        -- 可视化金币收入
+                    end
                 end
-            end
-            
-            -- 建筑修复效果
-            if building.effect == "structureRegen" then
-                local teamData = teams[building.team]
-                if teamData and teamData.base then
+                
+                -- 资源仓库效果
+                if building.effect == "resourceStorage" then
+                    if not teamData.base.bonusStorage then
+                        teamData.base.bonusStorage = building.effectValue
+                    end
+                end
+                
+                -- 贸易站自动出售效果
+                if building.secondaryEffect == "autoSell" then
+                    if not building.sellTimer then building.sellTimer = 0 end
+                    building.sellTimer = building.sellTimer + dt
+                    if building.sellTimer >= building.secondaryValue then
+                        building.sellTimer = 0
+                        -- 自动将一些资源转换为金币
+                        if teamData.base.resources >= 10 then
+                            local sellAmount = math.min(20, teamData.base.resources)
+                            teamData.base.resources = teamData.base.resources - sellAmount
+                            teamData.base.resources = teamData.base.resources + sellAmount * 1.5
+                        end
+                    end
+                end
+                
+                -- 建筑修复效果（RepairBay）
+                if building.effect == "structureRegen" then
                     -- 修复基地
                     if teamData.base.health < teamData.base.maxHealth then
                         teamData.base.health = math.min(
@@ -739,8 +795,62 @@ function love.update(dt)
                                     tower.maxHealth,
                                     tower.health + building.effectValue * dt
                                 )
+                                -- 显示修复效果
+                                if not tower.repairEffect then
+                                    tower.repairEffect = 0
+                                end
+                                tower.repairEffect = 0.5
                             end
                         end
+                    end
+                    
+                    -- 修复其他建筑
+                    if building.secondaryEffect == "autoRepair" then
+                        for _, otherBuilding in ipairs(specialBuildings) do
+                            if otherBuilding.team == building.team and 
+                               otherBuilding.isComplete and 
+                               not otherBuilding.isDead and
+                               otherBuilding ~= building and
+                               otherBuilding.health < otherBuilding.maxHealth then
+                                local dx = otherBuilding.x - building.x
+                                local dy = otherBuilding.y - building.y
+                                local distance = math.sqrt(dx * dx + dy * dy)
+                                if distance <= building.radius then
+                                    otherBuilding.health = math.min(
+                                        otherBuilding.maxHealth,
+                                        otherBuilding.health + building.effectValue * 0.5 * dt
+                                    )
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                -- 训练场效果：加速生产建筑的生产时间
+                if building.effect == "fastProduction" then
+                    for _, productionBuilding in ipairs(specialBuildings) do
+                        if productionBuilding.team == building.team and 
+                           productionBuilding.producesUnit and 
+                           productionBuilding.productionTimer and 
+                           productionBuilding.productionTimer > 0 then
+                            -- 额外加速生产
+                            productionBuilding.productionTimer = productionBuilding.productionTimer - building.effectValue * dt * 2
+                        end
+                    end
+                end
+                
+                -- 指挥中心：增加单位上限
+                if building.effect == "unitCapIncrease" then
+                    if not teamData.bonusUnitCap then
+                        teamData.bonusUnitCap = 0
+                    end
+                    teamData.bonusUnitCap = building.effectValue
+                end
+                
+                -- 科技中心：全局加成
+                if building.secondaryEffect == "globalStatBoost" then
+                    if not teamData.globalBoost then
+                        teamData.globalBoost = building.secondaryValue
                     end
                 end
             end
@@ -756,7 +866,7 @@ function love.update(dt)
     
     -- 更新所有队伍
     for i = 1, TEAM_COUNT do
-        updateTeam(TEAM_CONFIGS[i].name, dt, Barracks, Tower)
+        updateTeam(TEAM_CONFIGS[i].name, dt, Tower)
     end
     
     -- 检查游戏是否结束（只剩一个队伍存活）
@@ -824,13 +934,6 @@ function love.draw()
                 teamData.base:draw()
             end
             
-            -- 绘制兵营
-            if teamData.base and teamData.base.barracks then
-                for _, barracks in ipairs(teamData.base.barracks) do
-                    barracks:draw()
-                end
-            end
-            
             -- 绘制防御塔
             if teamData.base and teamData.base.towers then
                 for _, tower in ipairs(teamData.base.towers) do
@@ -845,9 +948,9 @@ function love.draw()
         resource:draw()
     end
     
-    -- 绘制特殊建筑
+    -- 绘制特殊建筑（包括生产建筑）
     for _, building in ipairs(specialBuildings) do
-        building:draw(camera.x / camera.scale, camera.y / camera.scale)
+        building:draw(0, 0)  -- 不需要相机偏移，因为已经应用了变换
     end
     
     -- 绘制所有队伍的单位
@@ -1119,142 +1222,183 @@ function love.draw()
     -- 绘制战斗提示
     BattleNotifications.draw()
     
-    -- 如果游戏结束，显示胜利者（现代设计）
+    -- 如果游戏结束，显示胜利者（现代设计 - 支持所有队伍）
     if gameOver then
         -- 暗化背景
         love.graphics.setColor(0, 0, 0, 0.75)
         love.graphics.rectangle("fill", 0, 0, 1600, 900)
         
-        -- 主面板
+        -- 主面板（自适应队伍数量）
+        local panelWidth = 1100
+        local panelHeight = math.min(700, 400 + TEAM_COUNT * 80)
+        local panelX = (1600 - panelWidth) / 2
+        local panelY = (900 - panelHeight) / 2
+        
         love.graphics.setColor(0.08, 0.08, 0.15, 0.96)
-        love.graphics.rectangle("fill", 250, 150, 1100, 600, 15, 15)
+        love.graphics.rectangle("fill", panelX, panelY, panelWidth, panelHeight, 15, 15)
         
         -- 渐变顶部
         love.graphics.setColor(0.12, 0.12, 0.22, 0.7)
-        love.graphics.rectangle("fill", 250, 150, 1100, 80, 15, 15)
+        love.graphics.rectangle("fill", panelX, panelY, panelWidth, 80, 15, 15)
+        
+        -- 获取胜利队伍的颜色
+        local winnerColor = {0.5, 0.5, 0.6}
+        for i = 1, TEAM_COUNT do
+            if teams[TEAM_CONFIGS[i].name].base and not teams[TEAM_CONFIGS[i].name].base.isDead then
+                winnerColor = TEAM_CONFIGS[i].color
+                break
+            end
+        end
         
         -- 外层发光边框
-        if winner == "Red Team" then
-            love.graphics.setColor(1, 0.2, 0.2, 0.4)
-        else
-            love.graphics.setColor(0.2, 0.2, 1, 0.4)
-        end
+        love.graphics.setColor(winnerColor[1], winnerColor[2], winnerColor[3], 0.4)
         love.graphics.setLineWidth(6)
-        love.graphics.rectangle("line", 248, 148, 1104, 604, 15, 15)
+        love.graphics.rectangle("line", panelX - 2, panelY - 2, panelWidth + 4, panelHeight + 4, 15, 15)
         
         -- 内层边框
         love.graphics.setColor(0.5, 0.5, 0.6, 0.8)
         love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", 250, 150, 1100, 600, 15, 15)
+        love.graphics.rectangle("line", panelX + 2, panelY + 2, panelWidth - 4, panelHeight - 4, 15, 15)
         love.graphics.setLineWidth(1)
         
         -- 标题
+        local titleX = panelX + panelWidth / 2 - 150
+        local titleY = panelY + 20
         love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.print("GAME OVER", 557, 172, 0, 3, 3)
+        love.graphics.print("GAME OVER", titleX + 2, titleY + 2, 0, 3, 3)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("GAME OVER", 555, 170, 0, 3, 3)
+        love.graphics.print("GAME OVER", titleX, titleY, 0, 3, 3)
         
-        -- 胜利者宣告（带特效）
-        local winY = 235
-        if winner == "Red Team" then
-            -- 红方胜利光晕
-            love.graphics.setColor(1, 0.3, 0.3, 0.2)
-            love.graphics.rectangle("fill", 280, winY - 10, 1040, 55, 8, 8)
+        -- 胜利者宣告
+        local winY = titleY + 65
+        if winner then
+            -- 获取胜利队伍的配置
+            local winnerTeamConfig = nil
+            for i = 1, TEAM_COUNT do
+                if winner:find(TEAM_CONFIGS[i].name:upper()) or winner:find(TEAM_CONFIGS[i].name) then
+                    winnerTeamConfig = TEAM_CONFIGS[i]
+                    break
+                end
+            end
             
-            love.graphics.setColor(0.3, 0, 0, 0.5)
-            love.graphics.print("RED TEAM WINS!", 522, winY + 4, 0, 2.5, 2.5)
-            love.graphics.setColor(1, 0.3, 0.3)
-            love.graphics.print("RED TEAM WINS!", 520, winY + 2, 0, 2.5, 2.5)
-            
-            -- 闪烁效果
-            local pulse = math.sin(love.timer.getTime() * 4) * 0.3 + 0.7
-            love.graphics.setColor(1, 0.5, 0.5, pulse)
-            love.graphics.circle("fill", 480, winY + 15, 8)
-            love.graphics.circle("fill", 1070, winY + 15, 8)
-        else
-            -- 蓝方胜利光晕
-            love.graphics.setColor(0.3, 0.3, 1, 0.2)
-            love.graphics.rectangle("fill", 280, winY - 10, 1040, 55, 8, 8)
-            
-            love.graphics.setColor(0, 0, 0.3, 0.5)
-            love.graphics.print("BLUE TEAM WINS!", 512, winY + 4, 0, 2.5, 2.5)
-            love.graphics.setColor(0.3, 0.3, 1)
-            love.graphics.print("BLUE TEAM WINS!", 510, winY + 2, 0, 2.5, 2.5)
-            
-            local pulse = math.sin(love.timer.getTime() * 4) * 0.3 + 0.7
-            love.graphics.setColor(0.5, 0.5, 1, pulse)
-            love.graphics.circle("fill", 470, winY + 15, 8)
-            love.graphics.circle("fill", 1060, winY + 15, 8)
+            if winnerTeamConfig then
+                -- 胜利光晕背景
+                love.graphics.setColor(winnerTeamConfig.color[1] * 0.4, winnerTeamConfig.color[2] * 0.4, 
+                                     winnerTeamConfig.color[3] * 0.4, 0.3)
+                love.graphics.rectangle("fill", panelX + 32, winY - 10, panelWidth - 64, 55, 8, 8)
+                
+                -- 胜利文字
+                local winText = winnerTeamConfig.name:upper() .. " TEAM WINS!"
+                local winTextX = panelX + (panelWidth - #winText * 35) / 2
+                love.graphics.setColor(0, 0, 0, 0.5)
+                love.graphics.print(winText, winTextX + 4, winY + 4, 0, 2.5, 2.5)
+                love.graphics.setColor(winnerTeamConfig.color)
+                love.graphics.print(winText, winTextX, winY, 0, 2.5, 2.5)
+                
+                -- 闪烁装饰
+                local pulse = math.sin(love.timer.getTime() * 4) * 0.3 + 0.7
+                love.graphics.setColor(winnerTeamConfig.color[1], winnerTeamConfig.color[2], 
+                                     winnerTeamConfig.color[3], pulse)
+                love.graphics.circle("fill", panelX + 130, winY + 15, 8)
+                love.graphics.circle("fill", panelX + panelWidth - 130, winY + 15, 8)
+            end
         end
         
         -- 战斗时长
+        local durationY = winY + 60
         love.graphics.setColor(0.8, 0.8, 0.9)
-        love.graphics.print(string.format("Battle Duration: %.1f seconds", frameCount / 60), 540, 300, 0, 1.3, 1.3)
+        love.graphics.print(string.format("Battle Duration: %.1f seconds", frameCount / 60), 
+                          panelX + (panelWidth - 350) / 2, durationY, 0, 1.3, 1.3)
         
         -- 统计标题
-        local statY = 345
+        local statY = durationY + 40
         love.graphics.setColor(1, 0.95, 0.4)
-        love.graphics.print("━━━━━━━ BATTLE STATISTICS ━━━━━━━", 480, statY, 0, 1.4, 1.4)
+        local titleText = "━━━━━━━ BATTLE STATISTICS ━━━━━━━"
+        love.graphics.print(titleText, panelX + (panelWidth - 480) / 2, statY, 0, 1.4, 1.4)
         
         -- 统计表格背景
         love.graphics.setColor(0.1, 0.1, 0.18, 0.6)
-        love.graphics.rectangle("fill", 290, statY + 35, 1020, 270, 8, 8)
+        local tableY = statY + 35
+        local tableHeight = 45 + 28 * 5
+        love.graphics.rectangle("fill", panelX + 42, tableY, panelWidth - 84, tableHeight, 8, 8)
         
         -- 表头
-        statY = statY + 50
-        local lineH = 28
+        local headerY = tableY + 15
+        local columnWidth = (panelWidth - 350) / TEAM_COUNT
         
         love.graphics.setColor(0.7, 0.7, 0.8)
-        love.graphics.print("Metric", 330, statY, 0, 1.2, 1.2)
+        love.graphics.print("Metric", panelX + 80, headerY, 0, 1.2, 1.2)
         
-        love.graphics.setColor(1, 0.4, 0.4)
-        love.graphics.rectangle("fill", 640, statY - 5, 100, 30, 4, 4)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("RED", 665, statY, 0, 1.2, 1.2)
-        
-        love.graphics.setColor(0.4, 0.4, 1)
-        love.graphics.rectangle("fill", 1080, statY - 5, 100, 30, 4, 4)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.print("BLUE", 1100, statY, 0, 1.2, 1.2)
+        -- 绘制每个队伍的表头
+        for i = 1, TEAM_COUNT do
+            local teamConfig = TEAM_CONFIGS[i]
+            local colX = panelX + 300 + (i - 1) * columnWidth
+            
+            -- 队伍颜色标签
+            love.graphics.setColor(teamConfig.color[1] * 0.8, teamConfig.color[2] * 0.8, 
+                                  teamConfig.color[3] * 0.8)
+            love.graphics.rectangle("fill", colX, headerY - 5, columnWidth - 20, 30, 4, 4)
+            
+            -- 队伍名称
+            love.graphics.setColor(1, 1, 1)
+            local teamLabel = teamConfig.name:upper():sub(1, 6)
+            love.graphics.print(teamLabel, colX + 10, headerY, 0, 1.2, 1.2)
+        end
         
         -- 数据行
-        local stats = {
-            {"Units Produced:", battleStats.red.unitsProduced, battleStats.blue.unitsProduced},
-            {"Enemy Kills:", battleStats.red.kills, battleStats.blue.kills},
-            {"Tower Kills:", battleStats.red.towerKills, battleStats.blue.towerKills},
-            {"Gold Spent:", string.format("$%d", math.floor(battleStats.red.goldSpent)), 
-                          string.format("$%d", math.floor(battleStats.blue.goldSpent))},
-            {"Buildings Built:", battleStats.red.buildingsBuilt, battleStats.blue.buildingsBuilt}
+        local metrics = {
+            {label = "Units Produced:", key = "unitsProduced"},
+            {label = "Enemy Kills:", key = "kills"},
+            {label = "Tower Kills:", key = "towerKills"},
+            {label = "Gold Spent:", key = "goldSpent", format = "$%d"},
+            {label = "Buildings Built:", key = "buildingsBuilt"}
         }
         
-        for i, stat in ipairs(stats) do
-            statY = statY + lineH
-            
+        local lineH = 28
+        local dataY = headerY + 35
+        
+        for i, metric in ipairs(metrics) do
             -- 交替行背景
             if i % 2 == 0 then
                 love.graphics.setColor(0.15, 0.15, 0.25, 0.4)
-                love.graphics.rectangle("fill", 300, statY - 3, 1000, 26, 3, 3)
+                love.graphics.rectangle("fill", panelX + 50, dataY - 3, panelWidth - 100, 26, 3, 3)
             end
             
             -- 指标名称
             love.graphics.setColor(0.8, 0.8, 0.9)
-            love.graphics.print(stat[1], 330, statY, 0, 1.1, 1.1)
+            love.graphics.print(metric.label, panelX + 80, dataY, 0, 1.1, 1.1)
             
-            -- 红方数据
-            love.graphics.setColor(1, 0.6, 0.6)
-            love.graphics.print(tostring(stat[2]), 680, statY, 0, 1.1, 1.1)
+            -- 绘制每个队伍的数据
+            for j = 1, TEAM_COUNT do
+                local teamConfig = TEAM_CONFIGS[j]
+                local teamStats = battleStats[teamConfig.name]
+                local colX = panelX + 300 + (j - 1) * columnWidth
+                
+                -- 队伍颜色
+                love.graphics.setColor(teamConfig.color[1] * 0.9, teamConfig.color[2] * 0.9, 
+                                      teamConfig.color[3] * 0.9)
+                
+                -- 格式化数据
+                local value = teamStats[metric.key]
+                if metric.format then
+                    value = string.format(metric.format, math.floor(value))
+                else
+                    value = tostring(value)
+                end
+                
+                love.graphics.print(value, colX + 15, dataY, 0, 1.1, 1.1)
+            end
             
-            -- 蓝方数据
-            love.graphics.setColor(0.6, 0.6, 1)
-            love.graphics.print(tostring(stat[3]), 1120, statY, 0, 1.1, 1.1)
+            dataY = dataY + lineH
         end
         
-        -- 重启提示（带动画）
+        -- 重启提示
+        local restartY = panelY + panelHeight - 50
         local pulse = math.sin(love.timer.getTime() * 3) * 0.2 + 0.8
         love.graphics.setColor(0.2, 0.3, 0.4, 0.6)
-        love.graphics.rectangle("fill", 490, 695, 620, 40, 8, 8)
+        love.graphics.rectangle("fill", panelX + (panelWidth - 620) / 2, restartY, 620, 40, 8, 8)
         love.graphics.setColor(0.6, 0.9, 1, pulse)
-        love.graphics.print("Press R to Start New Battle", 565, 705, 0, 1.3, 1.3)
+        love.graphics.print("Press R to Start New Battle", panelX + (panelWidth - 450) / 2, restartY + 10, 0, 1.3, 1.3)
     end
     
     -- 绘制选中角色的详细信息（现代美化版）
@@ -1759,7 +1903,7 @@ function love.draw()
             
             y = y + lineHeight
             love.graphics.setColor(0.7, 1, 0.7)
-            love.graphics.print(selectedSpecialBuilding.description, 
+            love.graphics.printf(selectedSpecialBuilding.description, 
                 infoX + 40, y, infoWidth - 80, "left", 0, 1.0, 1.0)
             
             y = y + lineHeight * 2 + 10
@@ -1823,6 +1967,82 @@ function love.keypressed(key)
     end
 end
 
+-- Helper function to find a random non-overlapping position in territory
+local function findBuildingPosition(base, buildingSize, existingBuildings, maxAttempts)
+    maxAttempts = maxAttempts or 50
+    local territoryRadius = 300  -- 领地半径
+    local minDistance = buildingSize + 30  -- 建筑之间的最小距离
+    
+    for attempt = 1, maxAttempts do
+        -- 在领地范围内随机位置
+        local angle = math.random() * math.pi * 2
+        local distance = math.random(80, territoryRadius)  -- 距离基地80-300像素
+        local x = base.x + math.cos(angle) * distance
+        local y = base.y + math.sin(angle) * distance
+        
+        -- 确保在世界范围内
+        x = math.max(100, math.min(WORLD_WIDTH - 100, x))
+        y = math.max(100, math.min(WORLD_HEIGHT - 100, y))
+        
+        -- 检查是否与现有建筑重叠
+        local overlaps = false
+        for _, building in ipairs(existingBuildings) do
+            if building.team == base.team and not building.isDead then
+                local dx = x - building.x
+                local dy = y - building.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < minDistance then
+                    overlaps = true
+                    break
+                end
+            end
+        end
+        
+        -- 检查是否与防御塔重叠
+        if not overlaps and base.towers then
+            for _, tower in ipairs(base.towers) do
+                if not tower.isDead then
+                    local dx = x - tower.x
+                    local dy = y - tower.y
+                    local dist = math.sqrt(dx * dx + dy * dy)
+                    if dist < minDistance + 20 then  -- 塔需要更大间距
+                        overlaps = true
+                        break
+                    end
+                end
+            end
+        end
+        
+        -- 检查是否与资源点重叠
+        if not overlaps and resources then
+            for _, resource in ipairs(resources) do
+                local dx = x - resource.x
+                local dy = y - resource.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < minDistance + 40 then  -- 资源点需要更大间距
+                    overlaps = true
+                    break
+                end
+            end
+        end
+        
+        -- 检查是否与基地太近
+        local dxBase = x - base.x
+        local dyBase = y - base.y
+        local distBase = math.sqrt(dxBase * dxBase + dyBase * dyBase)
+        if distBase < 70 then
+            overlaps = true
+        end
+        
+        if not overlaps then
+            return x, y, true
+        end
+    end
+    
+    -- 如果找不到合适位置，返回nil表示失败
+    return nil, nil, false
+end
+
 -- Helper function to build special buildings
 function tryBuildSpecialBuilding(base, buildingType)
     local config = SpecialBuilding.types[buildingType]
@@ -1831,24 +2051,58 @@ function tryBuildSpecialBuilding(base, buildingType)
         return
     end
     
-    if base.resources >= config.cost then
-        -- Find a position near the base
-        local angle = math.random() * math.pi * 2
-        local distance = 100 + math.random() * 50
-        local x = base.x + math.cos(angle) * distance
-        local y = base.y + math.sin(angle) * distance
+    -- 检查Buff类建筑的数量限制（support类别）
+    if config.category == "support" then
+        local supportCount = 0
+        for _, building in ipairs(specialBuildings) do
+            if building.team == base.team and not building.isDead then
+                local buildingConfig = SpecialBuilding.types[building.buildingType]
+                if buildingConfig and buildingConfig.category == "support" then
+                    supportCount = supportCount + 1
+                end
+            end
+        end
         
-        -- 建筑可以放置在任何位置（无边界限制）
+        if supportCount >= 2 then
+            print(string.format("[%s] ⚠️ Support building limit reached! Max 2 support buildings allowed. Current: %d", 
+                base.team:upper(), supportCount))
+            return
+        end
+    end
+    
+    if base.resources >= config.cost then
+        -- 在领地范围内找到一个不重叠的随机位置
+        local x, y, foundGoodSpot = findBuildingPosition(base, config.size, specialBuildings)
+        
+        if not foundGoodSpot or not x then
+            print(string.format("[%s] ⚠️ Cannot build %s - no valid position found (territory full or too crowded)", 
+                base.team:upper(), config.name))
+            return  -- 建造失败，不扣资源
+        end
         
         -- Create the building
         local building = SpecialBuilding.new(x, y, base.team, buildingType)
+        if not building then
+            print("ERROR: Failed to create building!")
+            return
+        end
+        
         table.insert(specialBuildings, building)
         
         -- Deduct cost
         base.resources = base.resources - config.cost
         
-        print(string.format("%s team built %s at (%.0f, %.0f) for $%d", 
-            base.team, config.name, x, y, config.cost))
+        -- 统计该队伍的建筑总数（用于显示）
+        local teamBuildingCount = 0
+        for _, b in ipairs(specialBuildings) do
+            if b.team == base.team and not b.isDead then
+                teamBuildingCount = teamBuildingCount + 1
+            end
+        end
+        
+        print(string.format("★★★ [%s] BUILDING CREATED: %s at (%.0f, %.0f) Cost:$%d Time:%.1fs Size:%d ★★★", 
+            base.team:upper(), config.name, x, y, config.cost, config.buildTime, config.size))
+        print(string.format("    %s team buildings: %d total", base.team:upper(), teamBuildingCount))
         
         -- Update stats
         if battleStats[base.team] then
@@ -1856,8 +2110,8 @@ function tryBuildSpecialBuilding(base, buildingType)
             battleStats[base.team].buildingsBuilt = battleStats[base.team].buildingsBuilt + 1
         end
     else
-        print(string.format("Not enough resources! Need $%d, have $%d", 
-            config.cost, base.resources))
+        print(string.format("[%s] Not enough resources for %s! Need $%d, have $%d", 
+            base.team:upper(), config.name, config.cost, math.floor(base.resources)))
     end
 end
 

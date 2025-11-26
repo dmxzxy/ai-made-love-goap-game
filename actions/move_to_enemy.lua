@@ -62,10 +62,108 @@ function MoveToEnemy:perform(agent, dt)
         return true
     end
     
-    -- 移动向目标
+    -- ===== 移动中攻击功能 =====
+    -- 检查攻击范围内是否有敌人，有则优先攻击
+    if agent.enemies and (agent.attackCooldown or 0) <= 0 then
+        local closestEnemy = nil
+        local closestDist = math.huge
+        
+        for _, enemy in ipairs(agent.enemies) do
+            if not enemy.isDead and enemy.health > 0 then
+                local eDx = enemy.x - agent.x
+                local eDy = enemy.y - agent.y
+                local eDist = math.sqrt(eDx * eDx + eDy * eDy)
+                
+                -- 在攻击范围内
+                if eDist <= agent.attackRange and eDist < closestDist then
+                    closestEnemy = enemy
+                    closestDist = eDist
+                end
+            end
+        end
+        
+        -- 如果找到攻击范围内的敌人，进行攻击
+        if closestEnemy then
+            -- 执行攻击
+            agent.isAttacking = true
+            agent.attackCooldown = 1 / agent.attackSpeed
+            
+            -- 朝向敌人
+            local attackAngle = math.atan2(closestEnemy.y - agent.y, closestEnemy.x - agent.x)
+            agent.angle = attackAngle
+            
+            -- 造成伤害
+            closestEnemy.health = closestEnemy.health - agent.attackDamage
+            closestEnemy.lastAttacker = agent
+            closestEnemy.lastAttackedTime = love.timer.getTime()
+            
+            -- 伤害数字效果
+            if closestEnemy.addDamageNumber then
+                closestEnemy:addDamageNumber("-" .. agent.attackDamage, {1, 0.3, 0.3})
+            end
+            
+            -- 粒子效果
+            if _G.Particles and _G.Particles.createHit then
+                _G.Particles.createHit(closestEnemy.x, closestEnemy.y, agent.color)
+            end
+        end
+    end
+    
+    -- 计算基础移动方向
+    local moveX = dx / distance
+    local moveY = dy / distance
+    
+    -- 避障：检查前方是否有盟友拥堵
+    local avoidX = 0
+    local avoidY = 0
+    local nearbyCount = 0
+    
+    for _, ally in ipairs(agent.allies) do
+        if ally ~= agent and not ally.isDead and ally.health > 0 then
+            local allyDx = ally.x - agent.x
+            local allyDy = ally.y - agent.y
+            local allyDist = math.sqrt(allyDx * allyDx + allyDy * allyDy)
+            
+            -- 检查前方50px范围内的盟友
+            if allyDist < 50 then
+                nearbyCount = nearbyCount + 1
+                -- 添加避开力
+                avoidX = avoidX - allyDx / (allyDist + 1)
+                avoidY = avoidY - allyDy / (allyDist + 1)
+            end
+        end
+    end
+    
+    -- 如果前方拥堵（3个以上盟友），添加避障偏移
+    if nearbyCount >= 3 then
+        -- 混合避障方向和目标方向
+        moveX = moveX * 0.6 + avoidX * 0.4
+        moveY = moveY * 0.6 + avoidY * 0.4
+        
+        -- 重新归一化
+        local newLen = math.sqrt(moveX * moveX + moveY * moveY)
+        if newLen > 0 then
+            moveX = moveX / newLen
+            moveY = moveY / newLen
+        end
+    end
+    
+    -- 移动向目标（带避障）
     local speed = agent.moveSpeed
-    agent.x = agent.x + (dx / distance) * speed * dt
-    agent.y = agent.y + (dy / distance) * speed * dt
+    
+    -- 拥堵时随机添加小偏移，帮助分散
+    if agent.isCrowded and agent.crowdedTimer > 0.5 then
+        local randomAngle = (math.random() - 0.5) * 0.5  -- ±0.25弧度
+        local cos = math.cos(randomAngle)
+        local sin = math.sin(randomAngle)
+        local newMoveX = moveX * cos - moveY * sin
+        local newMoveY = moveX * sin + moveY * cos
+        moveX = newMoveX
+        moveY = newMoveY
+    end
+    
+    agent.x = agent.x + moveX * speed * dt
+    agent.y = agent.y + moveY * speed * dt
     
     return false
 end

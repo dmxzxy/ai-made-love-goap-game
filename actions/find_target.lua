@@ -22,34 +22,45 @@ function FindTarget:perform(agent, dt)
     local bestTarget = nil
     local bestScore = -math.huge
     
+    -- 检查队伍是否已经发现敌人
+    local teamDiscovered = {}
+    if _G.teams and _G.teams[agent.team] and _G.teams[agent.team].discoveredEnemies then
+        teamDiscovered = _G.teams[agent.team].discoveredEnemies
+    end
+    
     -- 评估所有敌方单位（最高优先级）
     for _, enemy in ipairs(agent.enemies) do
         if enemy.health > 0 and not enemy.isDead then
+            -- 只考虑已发现的敌人或视野内的敌人
             local dx = enemy.x - agent.x
             local dy = enemy.y - agent.y
             local distance = math.sqrt(dx * dx + dy * dy)
+            local isVisible = distance <= agent.visionRange
+            local isDiscovered = teamDiscovered[enemy.team] ~= nil
             
-            -- 敌方单位基础分数很高
-            local score = 2000 / (distance + 10)
-            
-            -- 血量加成
-            local hpPercent = enemy.health / enemy.maxHealth
-            if hpPercent < 0.3 then
-                score = score + 200
-            elseif hpPercent < 0.5 then
-                score = score + 100
-            end
-            
-            -- 单位类型加成
-            if enemy.unitClass == "Healer" then
-                score = score + 300
-            elseif enemy.unitClass == "Sniper" then
-                score = score + 200
-            end
-            
-            if score > bestScore then
-                bestScore = score
-                bestTarget = enemy
+            if isVisible or isDiscovered then
+                -- 敌方单位基础分数很高
+                local score = 2000 / (distance + 10)
+                
+                -- 血量加成
+                local hpPercent = enemy.health / enemy.maxHealth
+                if hpPercent < 0.3 then
+                    score = score + 200
+                elseif hpPercent < 0.5 then
+                    score = score + 100
+                end
+                
+                -- 单位类型加成
+                if enemy.unitClass == "Healer" then
+                    score = score + 300
+                elseif enemy.unitClass == "Sniper" then
+                    score = score + 200
+                end
+                
+                if score > bestScore then
+                    bestScore = score
+                    bestTarget = enemy
+                end
             end
         end
     end
