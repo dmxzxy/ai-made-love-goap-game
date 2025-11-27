@@ -11,7 +11,6 @@ function AttackEnemy.new()
     self:addPrecondition("hasTarget", true)
     self:addPrecondition("inRange", true)
     self:addEffect("attacking", true)  -- 添加攻击效果
-    self.attackCooldown = 0
     return self
 end
 
@@ -36,10 +35,10 @@ function AttackEnemy:checkProceduralPrecondition(agent)
     local dy = agent.target.y - agent.y
     local distance = math.sqrt(dx * dx + dy * dy)
     
-    -- 基地可以从稍远处攻击
-    local attackRange = agent.attackRange
+    -- 扩大攻击判定范围，允许轻微的追击
+    local attackRange = agent.attackRange * 1.2  -- 增加20%容错
     if agent.target == agent.enemyBase then
-        attackRange = attackRange + 30
+        attackRange = attackRange + 50
     end
     
     return distance <= attackRange
@@ -63,10 +62,42 @@ function AttackEnemy:perform(agent, dt)
         return true
     end
     
-    -- 更新冷却时间
-    if self.attackCooldown > 0 then
-        self.attackCooldown = self.attackCooldown - dt
-        return false
+    -- 更新冷却时间（冷却期间也可以做微调整）
+    if agent.attackCooldown > 0 then
+        -- 冷却期间：保持面向目标，允许微移动
+        local dx = agent.target.x - agent.x
+        local dy = agent.target.y - agent.y
+        agent.angle = math.atan2(dy, dx)
+        
+        local distance = math.sqrt(dx * dx + dy * dy)
+        
+        -- 冷却期间也允许位置微调（不要傻站着）
+        if not agent.target.towerType and not agent.target.isBase then
+            -- 近战单位：小幅环绕移动
+            if agent.attackRange < 150 and distance > agent.radius * 3 then
+                local strafeAngle = math.random() < 0.5 and math.pi/2 or -math.pi/2
+                local strafeX = math.cos(agent.angle + strafeAngle) * 10 * dt
+                local strafeY = math.sin(agent.angle + strafeAngle) * 10 * dt
+                agent.x = agent.x + strafeX
+                agent.y = agent.y + strafeY
+            end
+            
+            -- 远程单位：保持最佳射程
+            if agent.attackRange >= 150 then
+                local optimalRange = agent.attackRange * 0.8
+                if distance < optimalRange * 0.6 then
+                    -- 后退
+                    agent.x = agent.x - (dx / distance) * agent.moveSpeed * 0.2 * dt
+                    agent.y = agent.y - (dy / distance) * agent.moveSpeed * 0.2 * dt
+                elseif distance > optimalRange * 1.3 then
+                    -- 前进
+                    agent.x = agent.x + (dx / distance) * agent.moveSpeed * 0.2 * dt
+                    agent.y = agent.y + (dy / distance) * agent.moveSpeed * 0.2 * dt
+                end
+            end
+        end
+        
+        return false  -- 还在冷却中，继续等待
     end
     
     -- 面向目标
@@ -116,7 +147,10 @@ function AttackEnemy:perform(agent, dt)
     
     local finalDamage = damage * damageMultiplier
     local actualDamage = agent.target:takeDamage(finalDamage, isCrit, agent)  -- 传递攻击者
-    self.attackCooldown = agent.attackSpeed
+    
+    -- 设置攻击冷却和状态
+    agent.attackCooldown = agent.attackSpeed
+    agent.isAttacking = true
     
     -- 增加仇恨值（当对敌人或基地造成伤害时）
     if actualDamage > 0 and agent.target.team and agent.team then
@@ -140,10 +174,13 @@ function AttackEnemy:perform(agent, dt)
     agent:createAttackEffect(agent.target.x, agent.target.y)
     
     if actualDamage > 0 then
-        local targetType = (agent.target == agent.enemyBase) and "BASE" or "Enemy"
-        local targetHealth = agent.target.health
-        print(string.format("[%s] Attacking %s! Damage: %.1f%s Health: %.1f", 
-            agent.team, targetType, actualDamage, isCrit and " (CRIT)" or "", targetHealth))
+        -- 只在暴击或对基地攻击时打印日志
+        if isCrit or agent.target == agent.enemyBase then
+            local targetType = (agent.target == agent.enemyBase) and "BASE" or "Enemy"
+            local targetHealth = agent.target.health
+            print(string.format("[%s] Attacking %s! Damage: %.1f%s Health: %.1f", 
+                agent.team, targetType, actualDamage, isCrit and " (CRIT)" or "", targetHealth))
+        end
     end
     
     -- 继续攻击，不返回 true（除非目标死亡会在下次调用时返回true）

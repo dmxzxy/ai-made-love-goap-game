@@ -43,29 +43,34 @@ function AttackBase:perform(agent, dt)
         return true  -- 基地已摧毁，行动完成
     end
     
-    -- 攻击冷却
-    agent.attackCooldown = agent.attackCooldown or 0
-    agent.attackCooldown = agent.attackCooldown - dt
-    
-    if agent.attackCooldown <= 0 then
-        agent.attackCooldown = agent.attackSpeed
-        
-        -- 攻击基地
-        local isCrit = math.random() < agent.critChance
-        local damage = agent.attackDamage
-        
-        -- 对建筑物造成额外伤害 (50% bonus for bases)
-        local damageMultiplier = 1.5  -- 对基地的伤害提升50%
-        local finalDamage = damage * damageMultiplier
-        
-        local actualDamage = agent.enemyBase:takeDamage(finalDamage, isCrit)
-        
-        -- 创建攻击特效
-        agent:createAttackEffect(agent.enemyBase.x, agent.enemyBase.y)
-        
-        print(string.format("[%s] Attacking enemy base! Damage: %.1f", 
-            agent.team, actualDamage))
+    -- 检查攻击冷却（冷却期间也保持面向目标）
+    if agent.attackCooldown > 0 then
+        -- 面向基地
+        local dx = agent.enemyBase.x - agent.x
+        local dy = agent.enemyBase.y - agent.y
+        agent.angle = math.atan2(dy, dx)
+        return false  -- 还在冷却中
     end
+    
+    -- 设置攻击冷却
+    agent.attackCooldown = agent.attackSpeed
+    agent.isAttacking = true
+    
+    -- 攻击基地
+    local isCrit = math.random() < agent.critChance
+    local damage = agent.attackDamage
+    
+    -- 对建筑物造成额外伤害 (50% bonus for bases)
+    local damageMultiplier = 1.5  -- 对基地的伤害提升50%
+    local finalDamage = damage * damageMultiplier
+    
+    local actualDamage = agent.enemyBase:takeDamage(finalDamage, isCrit)
+    
+    -- 创建攻击特效
+    agent:createAttackEffect(agent.enemyBase.x, agent.enemyBase.y)
+    
+    print(string.format("[%s] Attacking enemy base! Damage: %.1f", 
+        agent.team, actualDamage))
     
     return false  -- 持续攻击
 end

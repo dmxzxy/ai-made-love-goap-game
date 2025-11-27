@@ -52,14 +52,14 @@ function MoveToEnemy:perform(agent, dt)
     -- 更新朝向
     agent.angle = math.atan2(dy, dx)
     
-    -- 如果在攻击范围内，停止移动（基地可以从稍远处攻击）
-    local attackRange = agent.attackRange
+    -- 如果在攻击范围内，立即完成移动（更积极）
+    local attackRange = agent.attackRange * 0.9  -- 稍微提前完成移动，减少延迟
     if agent.target == agent.enemyBase then
         attackRange = attackRange + 30
     end
     
     if distance <= attackRange then
-        return true
+        return true  -- 立即完成，进入攻击
     end
     
     -- ===== 移动中攻击功能 =====

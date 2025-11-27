@@ -158,12 +158,7 @@ function FindTarget:perform(agent, dt)
         end
     end
     
-    if bestTarget then
-        local targetType = bestTarget.unitClass or (bestTarget.towerType and "Tower") or "Base"
-        print(string.format("[%s] Target acquired: %s (score: %.1f)", 
-            agent.team, targetType, bestScore))
-    end
-    
+    -- 减少日志输出
     agent.target = bestTarget
     return true
 end

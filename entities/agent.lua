@@ -270,12 +270,17 @@ function Agent.new(x, y, team, color, unitClass)
     -- 战斗反应系统
     self.lastAttacker = nil  -- 最后一个攻击我的敌人
     self.lastAttackedTime = 0  -- 上次被攻击的时间
+    self.counterAttackCooldown = 0  -- 反击冷却（防止频繁切换目标）
     self.aggroRadius = 350  -- 仇恨范围（200→350，更大的视野）
     
     -- 减速效果
     self.slowedUntil = 0
     self.originalSpeed = nil
     self.isFrozen = false
+    
+    -- 攻击冷却
+    self.attackCooldown = 0
+    self.isAttacking = false
     
     return self
 end
@@ -304,6 +309,20 @@ function Agent:update(dt)
     -- 更新视觉效果
     if self.flashTime > 0 then
         self.flashTime = self.flashTime - dt
+    end
+    
+    -- 更新反击冷却
+    if self.counterAttackCooldown > 0 then
+        self.counterAttackCooldown = self.counterAttackCooldown - dt
+    end
+    
+    -- 更新攻击冷却
+    if self.attackCooldown > 0 then
+        self.attackCooldown = self.attackCooldown - dt
+        if self.attackCooldown <= 0 then
+            self.attackCooldown = 0
+            self.isAttacking = false
+        end
     end
     
     if self.attackEffect then
@@ -390,7 +409,7 @@ function Agent:update(dt)
             
             -- 连续3次检测到卡住（1.5秒），强制重新选择目标
             if self.consecutiveStuckChecks >= 3 then
-                print(string.format("[%s %s] Stuck detected! Switching target...", self.team, self.unitClass))
+                -- 减少日志输出
                 self:reevaluateTarget()
                 self.consecutiveStuckChecks = 0  -- 重置计数
                 self.currentPlan = nil  -- 重新规划
@@ -405,43 +424,38 @@ function Agent:update(dt)
         self.stuckCheckTimer = 0
     end
     
-    -- 战斗反应：被攻击时立即反击（更强的反应）
-    if self.lastAttacker and (love.timer.getTime() - self.lastAttackedTime < 3) then
-        if not self.lastAttacker.isDead and self.lastAttacker.health > 0 then
-            local dx = self.lastAttacker.x - self.x
-            local dy = self.lastAttacker.y - self.y
-            local dist = math.sqrt(dx * dx + dy * dy)
-            
-            -- 攻击者在范围内
-            if dist <= self.aggroRadius then
-                -- 如果没有目标，立即反击
-                if not self.target or self.target.isDead or self.target.health <= 0 then
-                    self.target = self.lastAttacker
-                    self.currentPlan = nil
-                    print(string.format("[%s %s] Counter-attacking attacker!", self.team, self.unitClass))
-                else
-                    -- 即使有目标，如果攻击者更近，也切换目标
-                    local currentDx = self.target.x - self.x
-                    local currentDy = self.target.y - self.y
-                    local currentDist = math.sqrt(currentDx * currentDx + currentDy * currentDy)
-                    
-                    -- 攻击者比当前目标近80px以上，立即切换
-                    if dist < currentDist - 80 then
+    -- 战斗反应：被攻击时可能反击（但不会造成僵直）
+    -- 只在没有冷却且没有目标时才反击
+    if self.counterAttackCooldown <= 0 and not self.isAttacking then
+        if self.lastAttacker and (love.timer.getTime() - self.lastAttackedTime < 2) then
+            if not self.lastAttacker.isDead and self.lastAttacker.health > 0 then
+                local dx = self.lastAttacker.x - self.x
+                local dy = self.lastAttacker.y - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                
+                -- 攻击者在仇恨范围内
+                if dist <= self.aggroRadius then
+                    -- 只在没有目标时才反击（避免频繁切换）
+                    if not self.target or self.target.isDead or self.target.health <= 0 then
                         self.target = self.lastAttacker
-                        self.currentPlan = nil
-                        print(string.format("[%s %s] Switching to closer attacker! (%.0f < %.0f)", 
-                            self.team, self.unitClass, dist, currentDist))
+                        -- 不清空计划！让GOAP自然切换到攻击
+                        -- self.currentPlan = nil  -- 移除这行，避免僵直
+                        self.counterAttackCooldown = 1.0  -- 1秒冷却
                     end
                 end
             end
         end
     end
     
-    -- 实时目标重新评估：更频繁检查（每0.8秒）
+    -- 实时目标重新评估：在非战斗状态更频繁检查
     self.targetReevalTimer = (self.targetReevalTimer or 0) + dt
-    if self.targetReevalTimer >= 0.8 then  -- 从1.5秒改为0.8秒，更快响应
+    local reevalInterval = self.isAttacking and 2.0 or 0.5  -- 攻击中2秒检查一次，否则0.5秒
+    if self.targetReevalTimer >= reevalInterval then
         self.targetReevalTimer = 0
-        self:reevaluateTarget()
+        -- 只在没有有效目标或目标已死时重新评估
+        if not self.target or self.target.isDead or self.target.health <= 0 then
+            self:reevaluateTarget()
+        end
     end
     
     -- 矿工特殊逻辑
@@ -476,17 +490,38 @@ function Agent:update(dt)
         if self.currentAction:checkProceduralPrecondition(self) then
             local completed = self.currentAction:perform(self, dt)
             if completed then
-                print(string.format("[%s] Completed action: %s", self.team, self.currentAction.name))
+                -- 行动完成，移动到下一个行动
                 self.currentActionIndex = self.currentActionIndex + 1
+                
+                -- 如果是攻击行动完成，清除目标但不清空计划
+                -- 让GOAP在下一帧自然重新规划，避免僵直
+                if self.currentAction.name == "AttackEnemy" or self.currentAction.name == "AttackBase" then
+                    self.target = nil
+                    -- 不要立即清空计划！让它在下一帧自然处理
+                    -- self.currentPlan = nil
+                end
             end
         else
-            -- 如果前置条件不满足，重新规划
-            print(string.format("[%s] Action %s precondition failed, replanning", self.team, self.currentAction.name))
-            self.currentPlan = nil
+            -- 前置条件失败，但不要立即重新规划
+            -- 给一个短暂的缓冲时间（0.1秒），避免频繁规划
+            self.replanCooldown = (self.replanCooldown or 0)
+            if self.replanCooldown <= 0 then
+                self.currentPlan = nil
+                self.replanCooldown = 0.1
+            end
         end
     else
-        -- 没有计划，尝试重新规划
-        self:makePlan()
+        -- 没有计划，但也要有冷却，避免疯狂规划
+        self.replanCooldown = (self.replanCooldown or 0)
+        if self.replanCooldown <= 0 then
+            self:makePlan()
+            self.replanCooldown = 0.05  -- 规划失败时，50ms后重试
+        end
+    end
+    
+    -- 更新重新规划冷却
+    if self.replanCooldown and self.replanCooldown > 0 then
+        self.replanCooldown = self.replanCooldown - dt
     end
 end
 
@@ -848,20 +883,13 @@ function Agent:makePlan()
     self.currentPlan = self.planner:plan(self.actions, self.worldState, self.goalState)
     self.currentActionIndex = 1
     
-    -- 只在计划改变时输出调试信息
-    if not oldPlan or not self.currentPlan or 
-       (oldPlan and self.currentPlan and #oldPlan ~= #self.currentPlan) then
-        if self.currentPlan then
-            print(string.format("[%s] New plan with %d actions:", self.team, #self.currentPlan))
-            for i, action in ipairs(self.currentPlan) do
-                print(string.format("  %d: %s", i, action.name))
-            end
-        else
-            print(string.format("[%s] No plan found! State: hasTarget=%s inRange=%s", 
-                self.team, 
-                tostring(self.worldState.hasTarget), 
-                tostring(self.worldState.inRange)))
-        end
+    -- 减少日志输出，提高性能
+    -- 只在没有找到计划时输出错误
+    if not self.currentPlan then
+        print(string.format("[%s] No plan found! State: hasTarget=%s inRange=%s", 
+            self.team, 
+            tostring(self.worldState.hasTarget), 
+            tostring(self.worldState.inRange)))
     end
 end
 
