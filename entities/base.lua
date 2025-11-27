@@ -82,10 +82,6 @@ function Base.new(x, y, team, color)
     -- 生产进度条
     self.productionProgress = 0
     
-    -- 科技树系统
-    local TechTree = require("entities.tech_tree")
-    self.techTree = TechTree.new(team)
-    
     return self
 end
 
@@ -102,21 +98,15 @@ function Base:update(dt, currentUnitCount, resources, minerCount)
         return nil, nil
     end
     
-    -- 更新科技树
-    if self.techTree then
-        self.techTree:update(dt, self)
-    end
-    
     -- 受击闪烁效果
     if self.flashTime > 0 then
         self.flashTime = self.flashTime - dt
     end
     
-    -- 自动采集附近的资源（应用科技加成）
+    -- 自动采集附近的资源
     self.nearbyResources = resources or {}
     local mined = 0
-    local miningBonus = self.techTree and self.techTree:getTechBonus("miningSpeedBonus") or 0
-    local totalMiningRate = (self.miningRate + self.minerBonus) * (1 + miningBonus)
+    local totalMiningRate = self.miningRate + self.minerBonus
     
     for _, resource in ipairs(self.nearbyResources) do
         if not resource.depleted then
@@ -225,47 +215,6 @@ function Base:updateStrategy(minerCount, currentUnitCount, enemyUnitCount)
     self.strategy.mode = "defensive"
     self.strategy.reservedGold = 120
     self.strategy.waveTarget = 3
-    
-    -- AI自动研究科技
-    self:tryAutoResearch()
-end
-
--- AI自动研究科技
-function Base:tryAutoResearch()
-    if not self.techTree or self.techTree.currentResearch then
-        return  -- 已经在研究或没有科技树
-    end
-    
-    local TechTree = require("entities.tech_tree")
-    
-    -- 根据策略模式选择科技
-    if self.strategy.mode == "economy" then
-        -- 经济模式：优先经济科技
-        if not self.techTree:hasTech("improvedMining") and self.resources >= 350 then
-            self.techTree:startResearch("improvedMining", self)
-        elseif not self.techTree:hasTech("efficientStorage") and self.resources >= 300 then
-            self.techTree:startResearch("efficientStorage", self)
-        end
-    elseif self.strategy.mode == "offensive" then
-        -- 进攻模式：优先军事科技
-        if not self.techTree:hasTech("advancedWeapons") and self.resources >= 450 then
-            self.techTree:startResearch("advancedWeapons", self)
-        elseif not self.techTree:hasTech("tacticalTraining") and self.resources >= 400 then
-            self.techTree:startResearch("tacticalTraining", self)
-        end
-    elseif self.strategy.mode == "defensive" then
-        -- 防守模式：优先防御科技
-        if not self.techTree:hasTech("fortification") and self.resources >= 550 then
-            self.techTree:startResearch("fortification", self)
-        elseif not self.techTree:hasTech("combatArmor") and self.resources >= 500 then
-            self.techTree:startResearch("combatArmor", self)
-        end
-    end
-    
-    -- 通用科技（任何模式都可以研究）
-    if self.resources >= 450 and not self.techTree:hasTech("rapidDeployment") then
-        self.techTree:startResearch("rapidDeployment", self)
-    end
 end
 
 -- 选择要生产的兵种（基于战术策略）
@@ -500,7 +449,7 @@ end
 
 -- AI决定是否建造特殊建筑
 function Base:shouldBuildSpecialBuilding(specialBuildings)
-    -- 如果资源不足或正在建造，不建造（降低门槛到100资源）
+    -- 如果资源不足或正在建造，不建造
     if self.resources < 100 then
         return nil
     end
@@ -522,108 +471,64 @@ function Base:shouldBuildSpecialBuilding(specialBuildings)
     -- 建筑优先级评分系统
     local priorities = {}
     
-    -- 早期优先建造生产建筑（步兵工厂）
-    if gameTime > 10 and (myBuildings.InfantryFactory or 0) < 2 and self.resources >= 120 then
-        table.insert(priorities, {type = "InfantryFactory", score = 150})  -- 最高优先级
+    -- 早期优先建造综合工厂
+    if gameTime > 10 and (myBuildings.UniversalFactory or 0) < 2 and self.resources >= 150 then
+        table.insert(priorities, {type = "UniversalFactory", score = 150})  -- 最高优先级
     end
     
     -- 经济模式：优先资源建筑
     if self.strategy.mode == "economy" then
-        -- 早期建造金矿（允许多个）
-        if gameTime > 20 and (myBuildings.GoldMine or 0) < 3 and self.resources >= 200 then  -- 从2增加到3
+        if gameTime > 20 and (myBuildings.GoldMine or 0) < 3 and self.resources >= 200 then
             table.insert(priorities, {type = "GoldMine", score = 100})
         end
-        if gameTime > 30 and (myBuildings.TradingPost or 0) < 2 and self.resources >= 150 then  -- 从1增加到2
+        if gameTime > 30 and (myBuildings.TradingPost or 0) < 2 and self.resources >= 150 then
             table.insert(priorities, {type = "TradingPost", score = 90})
         end
-        if gameTime > 40 and (myBuildings.ResourceDepot or 0) < 2 and self.resources >= 120 then  -- 从1增加到2
+        if gameTime > 40 and (myBuildings.ResourceDepot or 0) < 2 and self.resources >= 120 then
             table.insert(priorities, {type = "ResourceDepot", score = 80})
-        end
-        if gameTime > 50 and (myBuildings.Refinery or 0) < 1 and self.resources >= 180 then
-            table.insert(priorities, {type = "Refinery", score = 75})
-        end
-        -- 额外的生产建筑
-        if gameTime > 40 and (myBuildings.ScoutCamp or 0) < 1 and self.resources >= 110 then
-            table.insert(priorities, {type = "ScoutCamp", score = 70})
         end
     end
     
-    -- 防御模式：优先防御建筑（允许多个）
+    -- 防御模式：优先防御建筑
     if self.strategy.mode == "defensive" then
-        if (myBuildings.Bunker or 0) < 3 and self.resources >= 250 then  -- 从2增加到3
+        if (myBuildings.Bunker or 0) < 3 and self.resources >= 250 then
             table.insert(priorities, {type = "Bunker", score = 95})
         end
-        if (myBuildings.Watchtower or 0) < 3 and self.resources >= 180 then  -- 从2增加到3
+        if (myBuildings.Watchtower or 0) < 3 and self.resources >= 180 then
             table.insert(priorities, {type = "Watchtower", score = 90})
         end
-        if (myBuildings.Bunker or 0) >= 1 and (myBuildings.ShieldGenerator or 0) < 2 and self.resources >= 350 then  -- 从1增加到2
-            table.insert(priorities, {type = "ShieldGenerator", score = 85})
-        end
-        if (myBuildings.MedicalStation or 0) < 2 and self.resources >= 180 then  -- 从1增加到2
+        if (myBuildings.MedicalStation or 0) < 2 and self.resources >= 180 then
             table.insert(priorities, {type = "MedicalStation", score = 80})
-        end
-        if (myBuildings.Barricade or 0) < 3 and self.resources >= 100 then  -- 从2增加到3
-            table.insert(priorities, {type = "Barricade", score = 75})
         end
         if (myBuildings.Fortress or 0) < 1 and self.resources >= 300 then
             table.insert(priorities, {type = "Fortress", score = 70})
         end
-        -- 生产建筑
-        if gameTime > 30 and (myBuildings.SniperPost or 0) < 1 and self.resources >= 160 then
-            table.insert(priorities, {type = "SniperPost", score = 65})
-        end
     end
     
-    -- 进攻模式：优先军事建筑 + 生产建筑
+    -- 进攻模式：优先军事建筑
     if self.strategy.mode == "offensive" then
-        if (myBuildings.Arsenal or 0) < 2 and self.resources >= 250 then  -- 从1增加到2
+        if (myBuildings.Arsenal or 0) < 2 and self.resources >= 250 then
             table.insert(priorities, {type = "Arsenal", score = 100})
-        end
-        if (myBuildings.WarFactory or 0) < 2 and self.resources >= 280 then  -- 从1增加到2
-            table.insert(priorities, {type = "WarFactory", score = 95})
         end
         if (myBuildings.CommandCenter or 0) < 1 and self.resources >= 320 then
             table.insert(priorities, {type = "CommandCenter", score = 90})
         end
-        if (myBuildings.TrainingGround or 0) < 2 and self.resources >= 150 then  -- 从1增加到2
+        if (myBuildings.TrainingGround or 0) < 2 and self.resources >= 150 then
             table.insert(priorities, {type = "TrainingGround", score = 85})
         end
-        -- 生产建筑
-        if gameTime > 25 and (myBuildings.TankFactory or 0) < 1 and self.resources >= 200 then
-            table.insert(priorities, {type = "TankFactory", score = 80})
-        end
-        if gameTime > 35 and (myBuildings.GunnerArmory or 0) < 1 and self.resources >= 150 then
-            table.insert(priorities, {type = "GunnerArmory", score = 75})
-        end
     end
     
-    -- 绝境模式：建造修复和支援建筑
+    -- 绝境模式：建造支援建筑
     if self.strategy.mode == "desperate" then
-        if (myBuildings.RepairBay or 0) < 3 and self.resources >= 160 then  -- 从2增加到3
-            table.insert(priorities, {type = "RepairBay", score = 100})
-        end
-        if (myBuildings.MedicalStation or 0) < 3 and self.resources >= 180 then  -- 从2增加到3
+        if (myBuildings.MedicalStation or 0) < 2 and self.resources >= 180 then
             table.insert(priorities, {type = "MedicalStation", score = 95})
-        end
-    end
-    
-    -- 后期：建造科技建筑
-    if gameTime > 90 then
-        if (myBuildings.ResearchLab or 0) < 2 and self.resources >= 200 then  -- 从1增加到2
-            table.insert(priorities, {type = "ResearchLab", score = 70})
-        end
-        if (myBuildings.ResearchLab or 0) >= 1 and (myBuildings.TechCenter or 0) < 1 and self.resources >= 400 then
-            table.insert(priorities, {type = "TechCenter", score = 65})
         end
     end
     
     -- 通用支援建筑（任何模式都可能需要）
     if gameTime > 50 then
-        if (myBuildings.SupplyDepot or 0) < 2 and self.resources >= 140 then  -- 从1增加到2
+        if (myBuildings.SupplyDepot or 0) < 2 and self.resources >= 140 then
             table.insert(priorities, {type = "SupplyDepot", score = 60})
-        end
-        if (myBuildings.PowerPlant or 0) < 2 and self.resources >= 220 then  -- 从1增加到2
-            table.insert(priorities, {type = "PowerPlant", score = 55})
         end
     end
     

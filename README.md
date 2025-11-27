@@ -1,382 +1,247 @@
-# GOAP Battle - Love2D Multi-Team Strategic Warfare Game
+# 🎮 GOAP Battle - AI 策略战争游戏
 
-A large-scale real-time strategy game built with Love2D and GOAP (Goal-Oriented Action Planning) AI system, featuring **dynamic multi-team battles** (2-4 teams).
+基于 LÖVE2D 和 GOAP (Goal-Oriented Action Planning) AI 系统的实时策略游戏，支持 **2-4 队伍同时对战**。
 
-## 🌟 Multi-Team System (NEW!)
+![Game Screenshot](https://via.placeholder.com/800x400?text=GOAP+Battle+Game)
 
-### Configurable Team Count
-The game now supports **2, 3, or 4-way battles**! Simply change `TEAM_COUNT` in `main.lua`:
+---
 
-```lua
-local TEAM_COUNT = 4  -- Set to 2, 3, or 4
-```
+## ✨ 主要特性
 
-### Team Configurations
-- **RED Team** 🔴: Left side (classic attacker)
-- **BLUE Team** 🔵: Right side (classic defender)  
-- **GREEN Team** 🟢: Top side (new challenger!)
-- **YELLOW Team** 🟡: Bottom side (wildcard entry!)
+### 🤖 智能 AI 系统
+- **GOAP 规划**: 基于目标的智能决策
+- **4种战术模式**: 经济、防御、进攻、绝境
+- **自动资源管理**: 智能采集、生产、建造
+- **动态策略切换**: 根据战况自适应调整
 
-### Dynamic Gameplay Features
-- **Multi-directional Combat**: Teams attack all non-allied forces
-- **Alliance-Free Warfare**: Every team for themselves - no permanent alliances
-- **Strategic Positioning**: Teams spawn at map edges/corners based on count
-- **Adaptive Resource Distribution**: Resource points placed fairly for all teams
-- **Victory Condition**: Last team standing wins!
+### ⚔️ 8种兵种
+| 兵种 | 特点 | 适用场景 |
+|------|------|---------|
+| 👤 Soldier | 均衡型，基础单位 | 主力部队 |
+| ⛏️ Miner | 采集资源，高闪避 | 经济发展 |
+| 🎯 Sniper | 超远射程，高暴击 | 远程压制 |
+| 🔫 Gunner | 高射速，中等护甲 | 持续输出 |
+| 🛡️ Tank | 超高血量和护甲 | 前排坦克 |
+| 💨 Scout | 超高速度，高闪避 | 侦察骚扰 |
+| 💉 Healer | 治疗友军 | 辅助支援 |
+| 💣 Demolisher | 对建筑高伤害，范围攻击 | 攻城 |
+| 🏹 Ranger | 超远射程，移动射击 | 游击战 |
 
-### Benefits of Multi-Team Battles
-- 🎲 **Unpredictable Outcomes**: 3+ teams create chaotic, dynamic battles
-- 🧠 **Strategic Depth**: Teams must balance aggression vs conservation
-- 👀 **Spectator Value**: More engaging to watch with multiple fronts
-- 🔄 **Replay Value**: Each game plays out differently with team dynamics
+### 🏗️ 12种建筑
 
-### Tower Improvements
-- **Reduced Size**: All towers 20-40% smaller to prevent overlap
-  - Arrow Tower: 35 → 22
-  - Cannon Tower: 45 → 28  
-  - Laser Tower: 40 → 25
-  - Frost Tower: 38 → 24
-- **Better Placement**: Smart distribution algorithm prevents stacking
+#### 资源类 (3)
+- **ResourceDepot** 📦: 资源存储加成 +30%
+- **GoldMine** 💰: 被动收入 +3$/s
+- **TradingPost** 💱: 被动收入 +2$/s
 
-## 🧠 Tactical AI System
+#### 防御类 (3)
+- **Fortress** 🏰: 单位护甲 +25%
+- **Bunker** 🛡️: 单位护甲 +15%
+- **Watchtower** 👁️: 单位攻击范围 +20%
 
-### Dynamic Strategy Modes
-The AI now adapts its behavior based on game state:
+#### 军事类 (3)
+- **Arsenal** ⚔️: 单位攻击力 +20%
+- **TrainingGround** 🎖️: 单位移动速度 +25%
+- **CommandCenter** 📡: 单位攻击速度 +20%
 
-1. **Economy Mode** �
-   - Triggered: First 60 seconds or when miners < 2
-   - Focus: Rebuild economic foundation
-   - Reserved Gold: $150 (emergency fund)
-   - Unit Production: Prioritize miners, small defensive forces
-   - Goal: Establish stable resource income
+#### 生产类 (1)
+- **UniversalFactory** 🏭: 综合工厂，生产所有兵种
 
-2. **Defensive Mode** 🛡️
-   - Triggered: Enemy has +5 unit advantage OR base HP < 70%
-   - Focus: Consolidate forces and defend territory
-   - Reserved Gold: $120
-   - Unit Production: Balanced army composition
-   - Wave Size: 4 units before attacking
+#### 支援类 (2)
+- **MedicalStation** ⚕️: 范围内单位恢复 +5 HP/s
+- **SupplyDepot** 📮: 单位移动速度 +30%
 
-3. **Offensive Mode** ⚔️
-   - Triggered: Own unit advantage (+3) AND resources > $300
-   - Focus: Aggressive expansion and pressure
-   - Reserved Gold: $100
-   - Unit Production: High-quality assault units (Tanks, Demolishers, Rangers)
-   - Wave Size: 5 units for overwhelming attacks
+### 🎯 核心机制
+- ✅ **多队伍对战**: 支持 2-4 队同时对战
+- ✅ **防拥挤系统**: 智能碰撞推力和避障
+- ✅ **移动中攻击**: 单位边移动边战斗
+- ✅ **建筑碰撞检测**: 防止重叠建造
+- ✅ **动态游戏结束界面**: 支持所有队伍数量
+- ✅ **小地图系统**: 实时战况监控
+- ✅ **战斗通知**: 重要事件提示
 
-4. **Desperate Mode** 🔥
-   - Triggered: All miners dead OR (base HP < 30% AND units < 5)
-   - Focus: Last-ditch survival attempt
-   - Reserved Gold: $80 (reduced to enable comeback)
-   - Unit Production: Emergency miner rebuild, then cheap fast units
-   - Wave Size: 2 units for quick harassment
+---
 
-### Strategic Features
-- **Resource Protection**: AI reserves gold to rebuild miners if they're wiped out
-- **No More Feeding**: Units are produced in waves, preventing single-unit suicide charges
-- **Comeback Mechanics**: Desperate mode enables dramatic reversals when near defeat
-- **Adaptive Decision Making**: Strategy updates every second based on battlefield state
-- **Visible AI State**: Strategy mode and reserved gold shown in UI panels
+## 🚀 快速开始
 
-### Benefits
-- 🎯 **Better Pacing**: No instant spending = more strategic buildup
-- 🔄 **Comebacks Possible**: Reserved gold enables economic recovery
-- 🎭 **Varied Gameplay**: Different strategies create diverse battle scenarios
-- 📊 **Transparent AI**: Players can see what the AI is thinking
-
-## 🎨 Visual Effects System
-
-### Particle Effects
-- **Combat Effects**:
-  - Bullet trails for ranged units (Sniper, Gunner, Ranger)
-  - Muzzle flashes and sparks for melee combat
-  - Blood splatters on hit
-  - Explosion particles for critical hits
-- **Death Effects**:
-  - Multi-layered explosion on unit death
-  - Debris and smoke particles
-  - Shockwave ripples
-- **Tower Effects**:
-  - Arrow Tower: Arrow trails with impact sparks
-  - Cannon Tower: Ballistic trajectory + massive explosion with camera shake
-  - Laser Tower: Continuous energy beam particles
-  - Frost Tower: Ice projectiles + freezing pulse effect
-- **Special Effects**:
-  - Gold coins flying to base during mining
-  - Energy pulses for building construction
-  - Smoke trails for damaged units
-
-### Floating Damage Numbers
-- **Dynamic Combat Feedback**:
-  - Normal damage: White floating numbers
-  - Critical hits: Large golden numbers with glow effect
-  - High armor: Blue-tinted damage display
-  - Dodge: Green "DODGE" text with particles
-  - Smooth fade-out and arc animations
-
-### Camera System
-- **Screen Shake**:
-  - Small shake on unit death (intensity: 2)
-  - Medium shake on critical hits (intensity: 3)
-  - Heavy shake on cannon tower explosions (intensity: 4)
-- **Dynamic Background**:
-  - Grid battlefield layout (100px cells)
-  - Team-colored territory zones (red/blue tint)
-  - Enhanced center dividing line
-
-### Animation System
-- **Unit Movement**:
-  - Bobbing animation while moving (3px vertical oscillation)
-  - Direction-based rotation
-  - Speed-based animation frequency
-- **Attack Animations**:
-  - Enhanced attack lines with double-layer glow
-  - Expanding shockwave circles on impact
-  - Weapon-specific visual effects
-
-### Unit Leveling System (NEW!)
-- **Experience & Progression**:
-  - Units gain 1 EXP per kill
-  - 5 levels max (requires 3/5/7/9 kills per level)
-  - Each level up: Full heal + 10% all stats boost + 5% range increase
-- **Visual Progression**:
-  - Level 1: Normal appearance
-  - Level 2: Green aura (Veteran)
-  - Level 3: Blue aura (Elite)
-  - Level 4: Purple aura (Champion)
-  - Level 5: Golden aura (Legend)
-- **Level Up Effects**:
-  - Golden energy pulse explosion
-  - Rotating stars around unit (count = level)
-  - 1.5s visual celebration
-  - 5% size increase per level
-  - Camera shake on level up
-
-### Minimap System (NEW!)
-- **Location**: Bottom-right corner (200x200px)
-- **Features**:
-  - Real-time unit tracking (red/blue dots)
-  - Base locations with health rings
-  - Tower and barracks markers
-  - Resource nodes with depletion indicators
-  - Grid overlay with team-colored zones
-  - Unit counters (Red: X, Blue: Y)
-- **Interaction**:
-  - Click minimap to instantly jump camera to location
-  - Hover for detailed view
-  - Updates every frame for accuracy
-
-### Battle Notifications System (NEW!)
-- **Real-time Combat Alerts**:
-  - **Base Under Attack**: Red warning notification when base takes damage (5s cooldown)
-  - **Unit Level Up**: Golden celebration notification when units reach new levels
-  - **Building Complete**: Green notification for barracks/tower construction
-  - **Victory/Defeat**: Large announcement when game ends
-- **Visual Design**:
-  - Animated slide-in from top (smooth 60fps animation)
-  - Color-coded by notification type (red=danger, gold=achievement, green=success)
-  - Team-colored badges
-  - Life bar showing remaining display time (4s duration)
-  - Auto-stacking with max 5 notifications
-  - Fade-out animation when expiring
-- **Smart Anti-Spam**: Duplicate messages within 2s are filtered
-
-## Features
-
-### 🤖 GOAP AI System
-- Goal-oriented action planning with A* pathfinding
-- Dynamic decision making based on game state
-- 4 AI actions: FindTarget, MoveToEnemy, AttackEnemy, Idle
-
-### 🎮 Gameplay
-- **Large Map**: 1600x900 battlefield for epic battles
-- **Base Defense Mode**: Two AI-controlled bases battle for supremacy
-- **Resource Economy**: 12 resource nodes across the map
-- **Miner Units**: Deploy specialized workers to boost resource gathering
-- **Barracks System**: 8 specialized barracks types for diverse army composition
-- **Strategic Unit Production**: Bases intelligently choose unit types based on available resources
-- **9 Unit Classes** with unique abilities:
-  - **Miner** ($40): Resource gatherer, boosts economy (non-combat, high evasion)
-  - **Soldier** ($50): Balanced all-rounder
-  - **Scout** ($55): Ultra-fast reconnaissance unit (high dodge, high crit)
-  - **Gunner** ($70): Fast fire rate, high armor, suppression fire
-  - **Healer** ($75): Supports troops with healing aura (low combat power)
-  - **Sniper** ($80): Long range, high damage, high critical chance
-  - **Ranger** ($85): Extreme range, mobile shooting
-  - **Demolisher** ($90): Siege specialist with splash damage, 2x damage to buildings
-  - **Tank** ($100): Heavy armor, high HP, regeneration
-
-### 🏭 Barracks System (8 Types)
-Build specialized facilities to produce units faster and cheaper:
-- **Infantry Barracks** ($150): Produces Soldiers for $40 in 2 seconds
-- **Scout Camp** ($140): Produces Scouts for $45 in 1.5 seconds - fastest production!
-- **Armory** ($180): Produces Gunners for $55 in 2.5 seconds
-- **Sniper Tower** ($200): Produces Snipers for $60 in 3 seconds
-- **Field Hospital** ($220): Produces Healers for $60 in 3.5 seconds
-- **Ranger Post** ($210): Produces Rangers for $65 in 3.2 seconds
-- **Demolition Workshop** ($240): Produces Demolishers for $70 in 3.8 seconds
-- **Heavy Barracks** ($250): Produces Tanks for $80 in 4 seconds
-- Maximum 6 barracks per base
-- Bases automatically build diverse barracks for varied army composition
-
-### 💎 Resource System
-- **12 resource nodes** distributed across the battlefield (1000 resources each)
-  - 4 nodes near red base
-  - 4 nodes near blue base  
-  - 4 nodes in contested center
-- **Base Mining**: Automatic mining by bases (range: 150, base rate: 3/sec)
-- **Miner Units**: Deploy workers to boost resource gathering
-  - Each miner adds +2/sec to base mining rate
-  - Miners carry up to 50 resources
-  - Automatically find nearest resource and return to base
-  - High evasion, non-combat units
-- **Resource storage limit**: 800 per base
-- Control center resources for strategic advantage
-- Early game economy critical for mid/late game dominance
-
-### 🎯 Combat System
-- Physics-based collision detection
-- Unit-to-unit combat with different weapon ranges
-- Base and building targeting when enemies are eliminated
-- Armor and damage reduction system
-- Critical hits and dodge mechanics
-- **Special Abilities**:
-  - Healers: Passive healing aura for nearby allies
-  - Demolishers: Splash damage and building bonus
-  - Rangers: Can move while shooting
-  - Scouts: Ultra-high mobility for hit-and-run tactics
-
-## Requirements
-
-- [Love2D](https://love2d.org/) 11.4 or higher
-- Lua 5.1+
-
-## Installation
-
-1. Install Love2D from [https://love2d.org/](https://love2d.org/)
-2. Clone this repository:
+### 安装
+1. 安装 [LÖVE2D](https://love2d.org/) (11.0+)
+2. 克隆项目
 ```bash
-git clone https://github.com/YOUR_USERNAME/love-goap.git
-cd love-goap
+git clone https://github.com/dmxzxy/ai-made-love-goap-game.git
+cd ai-made-love-goap-game
 ```
-3. Run the game:
+
+### 运行游戏
 ```bash
 love .
 ```
 
-## Controls
+或在 Windows 上直接拖动项目文件夹到 `love.exe`
 
-- **Left Click**: Select agent, base, or barracks to view detailed information
-- **Click Anywhere**: Close info panel
-- **R**: Restart game
-- **ESC**: Quit game
-
-## Project Structure
-
-```
-love-goap/
-├── main.lua              # Main game loop
-├── conf.lua              # Love2D configuration
-├── test_goap.lua         # GOAP system tests
-├── actions/              # GOAP action definitions
-│   ├── attack_base.lua
-│   ├── attack_enemy.lua
-│   ├── find_target.lua
-│   ├── idle.lua
-│   ├── move_to_base.lua
-│   ├── move_to_enemy.lua
-│   └── retreat.lua
-├── entities/             # Game entities
-│   ├── agent.lua         # Combat units with GOAP AI
-│   ├── base.lua          # Base buildings with production
-│   ├── resource.lua      # Resource nodes
-│   └── barracks.lua      # Specialized production facilities
-└── goap/                 # GOAP system core
-    ├── action.lua        # Action base class
-    └── planner.lua       # A* planning algorithm
-```
-
-## Game Mechanics
-
-### Resource Economy
-- Bases automatically mine nearby resources
-- Each unit type costs different amounts of resources
-- Strategic resource control leads to better unit composition
-
-### Unit Production
-- Bases produce units automatically when resources are available
-- Production time: 8 seconds per unit (base)
-- **Max units per base**: 25 (increased for epic battles!)
-- AI strategically chooses from 9 unit types based on resource availability
-- Diverse army composition for tactical depth
-
-### Barracks Production
-- Each barracks specializes in one unit type
-- Faster production times than base (1.5-4 seconds)
-- Lower resource costs (20-40% discount)
-- Requires building time (4-8 seconds)
-- Bases auto-build up to 6 diverse barracks for varied armies
-
-### Combat
-- Units use GOAP AI to make tactical decisions
-- Different weapon ranges and firing rates
-- Collision detection prevents unit stacking
-- Units target enemy base when no enemies remain
-
-### Victory Conditions
-- Destroy enemy base to win
-- Game displays winner and battle statistics
-
-## Technical Details
-
-### GOAP Implementation
-The GOAP (Goal-Oriented Action Planning) system uses:
-- **State-based planning**: Units plan actions based on current world state
-- **A* pathfinding**: Finds optimal action sequence to reach goals
-- **Dynamic replanning**: Adapts to changing battlefield conditions
-- **Cost-based decisions**: Chooses most efficient action paths
-
-### Physics
-- Circle-based collision detection
-- Push-apart forces for realistic unit movement
-- Boundary constraints to keep units on map
-
-## Development
-
-### Adding New Unit Types
-Edit `entities/agent.lua` and add to `unitClasses` table:
+### 修改队伍数量
+编辑 `main.lua` 第 8 行：
 ```lua
-YourUnit = {
-    hp = 100,
-    damage = 15,
-    fireRate = 1.0,
-    range = 150,
-    speed = 80,
-    armor = 0.1,
-    size = 8
-}
+local TEAM_COUNT = 4  -- 改为 2, 3, 或 4
 ```
-
-### Adding New GOAP Actions
-1. Create action file in `actions/` directory
-2. Define preconditions and effects
-3. Implement `perform()` method
-4. Add to agent's available actions
-
-## Credits
-
-- **Framework**: Love2D
-- **AI Algorithm**: GOAP (Goal-Oriented Action Planning)
-- **Developer**: [Your Name]
-
-## License
-
-MIT License - Feel free to use and modify for your projects!
-
-## Screenshots
-
-[Add screenshots of your game here]
 
 ---
 
-**Note**: This is a demonstration project showcasing GOAP AI in a real-time strategy game context.
+## 🎮 游戏玩法
+
+### 开始游戏
+1. 运行游戏后会看到开始菜单
+2. 选择队伍数量 (2-4)
+3. 点击 "Start Battle" 开始
+4. AI 将自动对战，观察战况即可
+
+### 游戏目标
+- 消灭所有敌方基地
+- 最后存活的队伍获胜
+
+### UI 说明
+- **左上角**: 资源和队伍状态
+- **右下角**: 小地图
+- **中间**: 战斗通知
+- **底部**: 单位和建筑图标
+
+### 控制
+- **空格**: 暂停/继续
+- **鼠标滚轮**: 缩放地图（如果支持）
+- **ESC**: 退出游戏
+
+---
+
+## 📁 项目结构
+
+```
+love-goap/
+├── main.lua              # 游戏主入口
+├── conf.lua              # 配置文件
+├── ARCHITECTURE.md       # 详细架构文档
+├── actions/              # GOAP 行动
+├── entities/             # 游戏实体
+├── goap/                 # GOAP 规划系统
+├── systems/              # 游戏系统
+├── ui/                   # 用户界面
+├── effects/              # 视觉效果
+└── docs/                 # 开发文档
+```
+
+详细架构说明请查看 [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
+## 🛠️ 技术栈
+
+- **引擎**: LÖVE2D (Lua 游戏引擎)
+- **语言**: Lua 5.1+
+- **AI**: GOAP (Goal-Oriented Action Planning)
+- **寻路**: A* 算法
+- **碰撞检测**: 圆形碰撞
+
+---
+
+## 📊 游戏特色
+
+### AI 智能决策
+- 使用 GOAP 系统实现智能行为规划
+- A* 算法寻找最优行动序列
+- 动态评估游戏状态，切换战术模式
+
+### 战术多样性
+- **经济模式**: 发展经济，积累优势
+- **防御模式**: 建造防御，稳扎稳打
+- **进攻模式**: 快速进攻，一波推进
+- **绝境模式**: 生死存亡，背水一战
+
+### 视觉效果
+- 伤害数字显示（暴击、闪避、护甲）
+- 粒子效果（攻击、死亡）
+- 战斗通知系统
+- 实时小地图
+
+### 多队伍系统
+- 2队: 经典对抗
+- 3队: 混乱大战
+- 4队: 终极混战
+
+---
+
+## 🔧 开发
+
+### 添加新兵种
+编辑 `entities/agent.lua`，在构造函数中添加新的 `elseif` 分支
+
+### 添加新建筑
+编辑 `entities/special_building.lua` 的 `types` 表
+
+### 添加新行动
+在 `actions/` 目录创建新文件，继承 `Action` 类
+
+详细开发说明请查看 [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
+## 📝 更新日志
+
+### v2.0 (2024-11-27) - 代码重构
+- ✅ 移除科技树系统
+- ✅ 移除士气系统
+- ✅ 移除兵营系统
+- ✅ 简化建筑系统 (24 → 12 种)
+- ✅ 合并生产建筑为综合工厂
+- ✅ 优化单位参数（体积 -35%，射程 +50%）
+- ✅ 整理项目文件和文档
+
+### v1.5 (2024-11-26)
+- ✅ 防拥挤系统
+- ✅ 建筑碰撞检测
+- ✅ 移动中攻击
+- ✅ 动态游戏结束界面
+
+### v1.0 (2024-11)
+- ✅ 多队伍对战系统
+- ✅ GOAP AI 系统
+- ✅ 8种兵种
+- ✅ 12种建筑
+- ✅ 小地图和战斗通知
+
+更多历史记录请查看 `docs/` 目录
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+### 贡献指南
+1. Fork 项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
+
+---
+
+## 📄 许可
+
+本项目为个人学习项目，仅供学习交流使用。
+
+---
+
+## 🙏 致谢
+
+- [LÖVE2D](https://love2d.org/) - 优秀的 Lua 游戏引擎
+- GOAP 理论 - 来自游戏 AI 领域的智能决策算法
+
+---
+
+## 📮 联系方式
+
+- GitHub: [@dmxzxy](https://github.com/dmxzxy)
+- Repository: [ai-made-love-goap-game](https://github.com/dmxzxy/ai-made-love-goap-game)
+
+---
+
+**享受游戏！** 🎮✨

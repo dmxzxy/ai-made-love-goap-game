@@ -1,4 +1,4 @@
--- Special Buildings System
+-- Special Buildings System (Refactored - Simplified)
 local SpecialBuilding = {}
 SpecialBuilding.__index = SpecialBuilding
 
@@ -15,8 +15,7 @@ SpecialBuilding.types = {
         description = "+500 capacity",
         effect = "resourceStorage",
         effectValue = 500,
-        secondaryEffect = "minerCapacity",
-        secondaryValue = 0.50,
+        category = "resource",
         radius = 0
     },
     GoldMine = {
@@ -29,34 +28,20 @@ SpecialBuilding.types = {
         description = "+8$/sec",
         effect = "passiveIncome",
         effectValue = 8,
+        category = "resource",
         radius = 0
     },
     TradingPost = {
         name = "Trading Post",
         cost = 150,
         buildTime = 6,
-        color = {0.9, 1, 0.5},  -- 更亮的黄绿色
-        size = 42,  -- 从28增加到42
+        color = {0.9, 1, 0.5},
+        size = 42,
         health = 280,
         description = "+60% miner speed",
         effect = "minerSpeed",
         effectValue = 0.60,
-        secondaryEffect = "autoSell",
-        secondaryValue = 3,
-        radius = 0
-    },
-    Refinery = {
-        name = "Refinery",
-        cost = 180,
-        buildTime = 7,
-        color = {0.8, 0.9, 1},  -- 更亮的蓝色
-        size = 44,  -- 从32增加到44
-        health = 320,
-        description = "+100% resource value",
-        effect = "resourceValue",
-        effectValue = 1.0,
-        secondaryEffect = "spawnMiner",
-        secondaryValue = 1,
+        category = "support",
         radius = 0
     },
     
@@ -65,71 +50,40 @@ SpecialBuilding.types = {
         name = "Fortress",
         cost = 300,
         buildTime = 12,
-        color = {0.6, 0.6, 0.7},  -- 更亮的灰色
-        size = 50,  -- 从38增加到50
+        color = {0.6, 0.6, 0.7},
+        size = 50,
         health = 800,
         description = "+40% HP +30% armor",
         effect = "fortressAura",
         effectValue = 0.40,
-        secondaryEffect = "slowEnemies",
-        secondaryValue = 0.35,
+        category = "defense",
         radius = 450
     },
     Bunker = {
         name = "Bunker",
         cost = 250,
         buildTime = 10,
-        color = {0.5, 0.5, 0.4},  -- 更明显的棕灰色
-        size = 46,  -- 从35增加到46
+        color = {0.5, 0.5, 0.4},
+        size = 46,
         health = 500,
         description = "+50% defense heal 5/s",
         effect = "bunkerProtection",
         effectValue = 0.50,
-        secondaryEffect = "garrisonHeal",
-        secondaryValue = 5,
+        category = "defense",
         radius = 250
     },
     Watchtower = {
         name = "Watchtower",
         cost = 180,
         buildTime = 7,
-        color = {0.7, 0.7, 0.9},  -- 更亮的蓝色
-        size = 42,  -- 从28增加到42
+        color = {0.7, 0.7, 0.9},
+        size = 42,
         health = 350,
         description = "+100% vision +50% range",
         effect = "enhancedVision",
         effectValue = 1.0,
-        secondaryEffect = "rangeBoost",
-        secondaryValue = 0.50,
+        category = "defense",
         radius = 600
-    },
-    ShieldGenerator = {
-        name = "Shield Generator",
-        cost = 350,
-        buildTime = 14,
-        color = {0.4, 0.8, 1},  -- 更亮的青色
-        size = 44,  -- 从32增加到44
-        health = 450,
-        description = "50% shield absorb regen",
-        effect = "energyShield",
-        effectValue = 0.50,
-        secondaryEffect = "shieldRegen",
-        secondaryValue = 20,
-        radius = 400
-    },
-    Barricade = {
-        name = "Barricade",
-        cost = 100,
-        buildTime = 4,
-        color = {0.7, 0.6, 0.5},  -- 更明显的棕色
-        size = 44,  -- 从30增加到44
-        health = 1200,
-        description = "Block -40% speed reflect",
-        effect = "wallBlock",
-        effectValue = 0.40,
-        secondaryEffect = "damageReflect",
-        secondaryValue = 0.15,
-        radius = 180
     },
     
     -- === 军事类建筑 ===
@@ -137,208 +91,57 @@ SpecialBuilding.types = {
         name = "Arsenal",
         cost = 250,
         buildTime = 10,
-        color = {1, 0.6, 0.4},  -- 更亮的橙红色
-        size = 44,  -- 从32增加到44
+        color = {1, 0.6, 0.4},
+        size = 44,
         health = 400,
         description = "+35% damage +25% crit",
         effect = "combatBoost",
         effectValue = 0.35,
-        secondaryEffect = "critChance",
-        secondaryValue = 0.25,
+        category = "military",
         radius = 400
     },
     TrainingGround = {
         name = "Training Ground",
         cost = 150,
         buildTime = 6,
-        color = {0.8, 0.8, 0.5},  -- 更亮的黄色
-        size = 46,  -- 从35增加到46
+        color = {0.8, 0.8, 0.5},
+        size = 46,
         health = 280,
-        description = "-40% time spawn Lv2",
+        description = "-40% time spawn faster",
         effect = "fastProduction",
         effectValue = 0.40,
-        secondaryEffect = "spawnLevel",
-        secondaryValue = 2,
-        radius = 0
-    },
-    WarFactory = {
-        name = "War Factory",
-        cost = 280,
-        buildTime = 11,
-        color = {0.9, 0.4, 0.4},  -- 更亮的红色
-        size = 48,  -- 从36增加到48
-        health = 420,
-        description = "+50% DMG +30% HP +20% SPD",
-        effect = "eliteSpawn",
-        effectValue = 0.50,
-        secondaryEffect = "spawnHPBoost",
-        secondaryValue = 0.30,
+        category = "military",
         radius = 0
     },
     CommandCenter = {
         name = "Command Center",
         cost = 320,
         buildTime = 13,
-        color = {0.6, 0.7, 1},  -- 更亮的蓝色
-        size = 50,  -- 从38增加到50
+        color = {0.6, 0.7, 1},
+        size = 50,
         health = 480,
-        description = "+15 units +20% XP",
+        description = "+15 units capacity",
         effect = "unitCapIncrease",
         effectValue = 15,
-        secondaryEffect = "xpBoost",
-        secondaryValue = 0.20,
+        category = "military",
         radius = 0
     },
     
-    -- === 科研类建筑 ===
-    ResearchLab = {
-        name = "Research Lab",
-        cost = 200,
-        buildTime = 8,
-        color = {0.5, 0.7, 1},  -- 更亮的蓝色
-        size = 42,  -- 从30增加到42
-        health = 350,
-        description = "+50% XP unlock abilities",
-        effect = "acceleratedLearning",
-        effectValue = 0.50,
-        secondaryEffect = "unlockAbilities",
-        secondaryValue = 1,
-        radius = 0
-    },
-    TechCenter = {
-        name = "Tech Center",
-        cost = 400,
-        buildTime = 15,
-        color = {0.7, 0.4, 1},  -- 更亮的紫色
-        size = 48,  -- 从35增加到48
-        health = 400,
-        description = "Elite units +25% all stats",
-        effect = "advancedTech",
-        effectValue = 1,
-        secondaryEffect = "globalStatBoost",
-        secondaryValue = 0.25,
-        radius = 0
-    },
-    
-    -- === 生产类建筑（替代原Barracks系统）===
-    InfantryFactory = {
-        name = "Infantry Factory",
-        cost = 120,
-        buildTime = 5,
-        color = {0.7, 0.5, 0.3},
-        size = 44,
-        health = 350,
-        description = "Produces Soldiers",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Soldier",
-        productionTime = 1.5,
-        productionCost = 28,
-        radius = 0
-    },
-    TankFactory = {
-        name = "Tank Factory",
-        cost = 200,
-        buildTime = 7,
-        color = {0.6, 0.6, 0.6},
-        size = 48,
-        health = 400,
-        description = "Produces Tanks",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Tank",
-        productionTime = 3,
-        productionCost = 55,
-        radius = 0
-    },
-    SniperPost = {
-        name = "Sniper Post",
-        cost = 160,
-        buildTime = 6,
-        color = {0.4, 0.7, 0.4},
-        size = 42,
-        health = 320,
-        description = "Produces Snipers",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Sniper",
-        productionTime = 2.5,
-        productionCost = 42,
-        radius = 0
-    },
-    GunnerArmory = {
-        name = "Gunner Armory",
+    -- === 生产类建筑（合并为综合工厂）===
+    UniversalFactory = {
+        name = "Universal Factory",
         cost = 150,
-        buildTime = 5,
-        color = {0.8, 0.4, 0.4},
-        size = 43,
-        health = 340,
-        description = "Produces Gunners",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Gunner",
-        productionTime = 2,
-        productionCost = 38,
-        radius = 0
-    },
-    ScoutCamp = {
-        name = "Scout Camp",
-        cost = 110,
-        buildTime = 4,
-        color = {0.5, 0.8, 1},
-        size = 40,
-        health = 280,
-        description = "Produces Scouts",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Scout",
-        productionTime = 1.2,
-        productionCost = 32,
-        radius = 0
-    },
-    FieldHospital = {
-        name = "Field Hospital",
-        cost = 180,
         buildTime = 6,
-        color = {1, 1, 1},
-        size = 44,
-        health = 360,
-        description = "Produces Healers",
+        color = {0.7, 0.6, 0.4},
+        size = 50,
+        health = 400,
+        description = "Produces all unit types",
         effect = "unitProduction",
         effectValue = 1,
-        producesUnit = "Healer",
-        productionTime = 2.8,
-        productionCost = 42,
-        radius = 0
-    },
-    DemolitionWorkshop = {
-        name = "Demolition Workshop",
-        cost = 190,
-        buildTime = 6,
-        color = {1, 0.6, 0.2},
-        size = 45,
-        health = 370,
-        description = "Produces Demolishers",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Demolisher",
-        productionTime = 3,
-        productionCost = 48,
-        radius = 0
-    },
-    RangerStation = {
-        name = "Ranger Station",
-        cost = 170,
-        buildTime = 6,
-        color = {0.3, 0.6, 0.3},
-        size = 44,
-        health = 350,
-        description = "Produces Rangers",
-        effect = "unitProduction",
-        effectValue = 1,
-        producesUnit = "Ranger",
-        productionTime = 2.5,
-        productionCost = 45,
+        producesUnit = "Soldier",  -- 默认生产士兵
+        productionTime = 2.0,
+        productionCost = 35,
+        category = "production",
         radius = 0
     },
     
@@ -347,56 +150,26 @@ SpecialBuilding.types = {
         name = "Medical Station",
         cost = 180,
         buildTime = 7,
-        color = {0.4, 1, 0.6},  -- 更亮的绿色
-        size = 42,  -- 从28增加到42
+        color = {0.4, 1, 0.6},
+        size = 42,
         health = 300,
-        description = "+8 HP/s 25% revive",
+        description = "+8 HP/s heal aura",
         effect = "healingAura",
         effectValue = 8,
-        secondaryEffect = "reviveChance",
-        secondaryValue = 0.25,
+        category = "support",
         radius = 400
-    },
-    RepairBay = {
-        name = "Repair Bay",
-        cost = 160,
-        buildTime = 6,
-        color = {0.5, 0.9, 0.8},  -- 更亮的青绿色
-        size = 44,  -- 从30增加到44
-        health = 320,
-        description = "+12 HP/s auto-repair",
-        effect = "structureRegen",
-        effectValue = 12,
-        secondaryEffect = "autoRepair",
-        secondaryValue = 1,
-        radius = 500
     },
     SupplyDepot = {
         name = "Supply Depot",
         cost = 140,
         buildTime = 5,
-        color = {0.8, 0.8, 0.7},  -- 更亮的米色
-        size = 40,  -- 从26增加到40
+        color = {0.8, 0.8, 0.7},
+        size = 40,
         health = 300,
-        description = "+30% speed -20% cooldown",
+        description = "+30% speed",
         effect = "movementBoost",
         effectValue = 0.30,
-        secondaryEffect = "cooldownReduction",
-        secondaryValue = 0.20,
-        radius = 0
-    },
-    PowerPlant = {
-        name = "Power Plant",
-        cost = 220,
-        buildTime = 9,
-        color = {1, 1, 0.4},  -- 更亮的黄色
-        size = 46,  -- 从32增加到46
-        health = 380,
-        description = "-20% cost +50% energy dmg",
-        effect = "costReduction",
-        effectValue = 0.20,
-        secondaryEffect = "energyWeaponBoost",
-        secondaryValue = 0.50,
+        category = "support",
         radius = 0
     }
 }
@@ -459,12 +232,10 @@ end
 
 -- Get building category for visual differentiation
 function SpecialBuilding:getBuildingCategory()
-    local resourceTypes = {"ResourceDepot", "GoldMine", "TradingPost", "Refinery"}
-    local defenseTypes = {"Fortress", "Bunker", "Watchtower", "ShieldGenerator", "Barricade"}
-    local militaryTypes = {"Arsenal", "TrainingGround", "WarFactory", "CommandCenter"}
-    local researchTypes = {"ResearchLab", "TechCenter"}
-    local productionTypes = {"InfantryFactory", "TankFactory", "SniperPost", "GunnerArmory", 
-                            "ScoutCamp", "FieldHospital", "DemolitionWorkshop", "RangerStation"}
+    local resourceTypes = {"ResourceDepot", "GoldMine", "TradingPost"}
+    local defenseTypes = {"Fortress", "Bunker", "Watchtower"}
+    local militaryTypes = {"Arsenal", "TrainingGround", "CommandCenter"}
+    local productionTypes = {"UniversalFactory"}
     
     for _, t in ipairs(resourceTypes) do
         if self.buildingType == t then return "resource" end
@@ -474,9 +245,6 @@ function SpecialBuilding:getBuildingCategory()
     end
     for _, t in ipairs(militaryTypes) do
         if self.buildingType == t then return "military" end
-    end
-    for _, t in ipairs(researchTypes) do
-        if self.buildingType == t then return "research" end
     end
     for _, t in ipairs(productionTypes) do
         if self.buildingType == t then return "production" end
@@ -681,20 +449,6 @@ function SpecialBuilding:draw(offsetX, offsetY)
             self:drawDiamond(x, y, self.size/2 - 4, true)
             love.graphics.setLineWidth(1)
             
-        elseif buildingCategory == "research" then
-            -- 科研类：六边形 + 粗紫色边框
-            self:drawHexagon(x, y, self.size/2)
-            love.graphics.setColor(0.8, 0.4, 1, 1)
-            love.graphics.setLineWidth(4)
-            self:drawHexagon(x, y, self.size/2, true)
-            love.graphics.setLineWidth(1)
-            
-            -- 内部六边形
-            love.graphics.setColor(0.9, 0.6, 1, 0.6)
-            love.graphics.setLineWidth(2)
-            self:drawHexagon(x, y, self.size/2 - 4, true)
-            love.graphics.setLineWidth(1)
-            
         elseif buildingCategory == "production" then
             -- 生产类：五边形 + 粗橙色边框
             self:drawPentagon(x, y, self.size/2)
@@ -783,9 +537,6 @@ function SpecialBuilding:draw(offsetX, offsetY)
             iconScale = 2.0
         elseif self.buildingType == "TradingPost" then 
             iconText = "T"
-        elseif self.buildingType == "Refinery" then 
-            iconText = "Rf"
-            iconScale = 1.2
         -- 防御类
         elseif self.buildingType == "Fortress" then 
             iconText = "F"
@@ -794,66 +545,26 @@ function SpecialBuilding:draw(offsetX, offsetY)
             iconText = "B"
         elseif self.buildingType == "Watchtower" then 
             iconText = "W"
-        elseif self.buildingType == "ShieldGenerator" then 
-            iconText = "S"
-        elseif self.buildingType == "Barricade" then 
-            iconText = "||"
         -- 军事类
         elseif self.buildingType == "Arsenal" then 
             iconText = "A"
         elseif self.buildingType == "TrainingGround" then 
             iconText = "Tr"
             iconScale = 1.2
-        elseif self.buildingType == "WarFactory" then 
-            iconText = "WF"
-            iconScale = 1.2
         elseif self.buildingType == "CommandCenter" then 
             iconText = "C"
             iconScale = 1.8
-        -- 科研类
-        elseif self.buildingType == "ResearchLab" then 
-            iconText = "R"
-        elseif self.buildingType == "TechCenter" then 
-            iconText = "TC"
+        -- 生产类
+        elseif self.buildingType == "UniversalFactory" then
+            iconText = "UF"
             iconScale = 1.2
-        -- 生产类 (NEW!)
-        elseif self.buildingType == "InfantryFactory" then
-            iconText = "I"
-            iconScale = 1.6
-        elseif self.buildingType == "TankFactory" then
-            iconText = "T"
-            iconScale = 1.6
-        elseif self.buildingType == "SniperPost" then
-            iconText = "Sn"
-            iconScale = 1.3
-        elseif self.buildingType == "GunnerArmory" then
-            iconText = "G"
-            iconScale = 1.6
-        elseif self.buildingType == "ScoutCamp" then
-            iconText = "Sc"
-            iconScale = 1.3
-        elseif self.buildingType == "FieldHospital" then
-            iconText = "H"
-            iconScale = 1.6
-        elseif self.buildingType == "DemolitionWorkshop" then
-            iconText = "D"
-            iconScale = 1.6
-        elseif self.buildingType == "RangerStation" then
-            iconText = "Rg"
-            iconScale = 1.3
         -- 支援类
         elseif self.buildingType == "MedicalStation" then 
             iconText = "+"
             iconScale = 2.0
-        elseif self.buildingType == "RepairBay" then 
-            iconText = "Rp"
-            iconScale = 1.2
         elseif self.buildingType == "SupplyDepot" then 
             iconText = "Sp"
             iconScale = 1.2
-        elseif self.buildingType == "PowerPlant" then 
-            iconText = "P"
-            iconScale = 1.6
         end
         
         -- 图标背景（让图标更清晰）
@@ -877,9 +588,6 @@ function SpecialBuilding:draw(offsetX, offsetY)
         elseif category == "military" then
             categoryText = "[MILITARY]"
             categoryColor = {1, 0.4, 0.3}
-        elseif category == "research" then
-            categoryText = "[RESEARCH]"
-            categoryColor = {0.8, 0.4, 1}
         elseif category == "production" then
             categoryText = "[PRODUCTION]"
             categoryColor = {1, 0.7, 0.3}
@@ -931,14 +639,6 @@ function SpecialBuilding:draw(offsetX, offsetY)
             love.graphics.rectangle("fill", x - statusWidth/2 - 5, y - self.size/2 - 30, statusWidth + 10, 18, 3, 3)
             love.graphics.setColor(0.4, 1, 0.6, 1)
             love.graphics.print(statusText, x - statusWidth/2, y - self.size/2 - 28, 0, 0.9, 0.9)
-        elseif self.effect == "structureRegen" then
-            -- 维修站显示修复
-            local statusText = string.format("Repair %d/s", self.effectValue)
-            local statusWidth = love.graphics.getFont():getWidth(statusText) * 0.8
-            love.graphics.setColor(0, 0, 0, 0.8)
-            love.graphics.rectangle("fill", x - statusWidth/2 - 5, y - self.size/2 - 30, statusWidth + 10, 18, 3, 3)
-            love.graphics.setColor(0.5, 0.9, 1, 1)
-            love.graphics.print(statusText, x - statusWidth/2, y - self.size/2 - 28, 0, 0.8, 0.8)
         elseif self.effect == "combatBoost" then
             -- 武器库显示攻击加成
             local statusText = string.format("+%d%% DMG", math.floor(self.effectValue * 100))
@@ -947,14 +647,6 @@ function SpecialBuilding:draw(offsetX, offsetY)
             love.graphics.rectangle("fill", x - statusWidth/2 - 5, y - self.size/2 - 30, statusWidth + 10, 18, 3, 3)
             love.graphics.setColor(1, 0.5, 0.3, 1)
             love.graphics.print(statusText, x - statusWidth/2, y - self.size/2 - 28, 0, 0.85, 0.85)
-        elseif self.effect == "energyShield" then
-            -- 护盾生成器显示护盾
-            local statusText = string.format("%d%% Shield", math.floor(self.effectValue * 100))
-            local statusWidth = love.graphics.getFont():getWidth(statusText) * 0.8
-            love.graphics.setColor(0, 0, 0, 0.8)
-            love.graphics.rectangle("fill", x - statusWidth/2 - 5, y - self.size/2 - 30, statusWidth + 10, 18, 3, 3)
-            love.graphics.setColor(0.4, 0.8, 1, 1)
-            love.graphics.print(statusText, x - statusWidth/2, y - self.size/2 - 28, 0, 0.8, 0.8)
         end
     end
     

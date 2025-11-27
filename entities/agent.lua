@@ -49,7 +49,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.armor = 0
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 18  -- 标准大小
+        self.radius = 12  -- 缩小（18→12）
         self.isMiner = true
         self.miningRate = normalRandom(6, 9)  -- 每秒采集速度（4-6→6-9）
         self.miningRange = 50  -- 采集范围（必须靠近资源）
@@ -64,14 +64,14 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(50, 70)
         self.attackDamage = normalRandom(30, 45)
-        self.attackRange = normalRandom(180, 220)
+        self.attackRange = normalRandom(270, 330)  -- 增加射程（180-220→270-330）
         self.attackSpeed = normalRandom(1.5, 2.0)  -- 攻击慢
         self.critChance = normalRandom(0.4, 0.6)  -- 高暴击
         self.dodgeChance = math.random() * 0.15
         self.armor = math.random() * 0.1
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 19  -- 稍小但可见
+        self.radius = 13  -- 缩小（19→13）
         
     elseif unitClass == "Gunner" then
         -- 机枪手：高射速、中等伤害、中等血量、固定阵地
@@ -79,14 +79,14 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(40, 60)  -- 移动慢
         self.attackDamage = normalRandom(8, 12)  -- 单次伤害低
-        self.attackRange = normalRandom(110, 140)
+        self.attackRange = normalRandom(165, 210)  -- 增加射程（110-140→165-210）
         self.attackSpeed = normalRandom(0.3, 0.5)  -- 攻击快
         self.critChance = math.random() * 0.15
         self.dodgeChance = math.random() * 0.1
         self.armor = normalRandom(0.2, 0.35)  -- 高护甲
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 22  -- 中等偏大
+        self.radius = 15  -- 缩小（22→15）
         
     elseif unitClass == "Tank" then
         -- 坦克兵：超高血量、高护甲、低伤害、慢速
@@ -94,7 +94,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(35, 55)
         self.attackDamage = normalRandom(10, 16)
-        self.attackRange = normalRandom(70, 90)
+        self.attackRange = normalRandom(105, 135)  -- 增加射程（70-90→105-135）
         self.attackSpeed = normalRandom(1.2, 1.6)
         self.critChance = math.random() * 0.1
         self.dodgeChance = math.random() * 0.05
@@ -102,7 +102,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.hasRegen = math.random() < 0.5  -- 50%概率再生
         self.regenRate = normalRandom(3, 6)
         self.hasBerserk = false
-        self.radius = 28  -- 大体型，更易识别
+        self.radius = 18  -- 缩小（28→18）
         
     elseif unitClass == "Scout" then
         -- 侦察兵：超高速度、低血量、中等伤害、高闪避
@@ -110,14 +110,14 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(120, 160)  -- 超快
         self.attackDamage = normalRandom(15, 22)
-        self.attackRange = normalRandom(100, 130)
+        self.attackRange = normalRandom(150, 195)  -- 增加射程（100-130→150-195）
         self.attackSpeed = normalRandom(0.6, 0.9)
         self.critChance = normalRandom(0.25, 0.4)  -- 高暴击
         self.dodgeChance = normalRandom(0.3, 0.5)  -- 超高闪避
         self.armor = 0
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 16  -- 小巧快速
+        self.radius = 11  -- 缩小（16→11）
         
     elseif unitClass == "Healer" then
         -- 医疗兵：治疗友军、低战斗力
@@ -125,7 +125,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(60, 80)
         self.attackDamage = normalRandom(5, 10)  -- 低攻击
-        self.attackRange = normalRandom(80, 100)
+        self.attackRange = normalRandom(120, 150)  -- 增加射程（80-100→120-150）
         self.attackSpeed = normalRandom(1.5, 2.0)
         self.critChance = 0
         self.dodgeChance = normalRandom(0.15, 0.25)
@@ -133,7 +133,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.hasRegen = true
         self.regenRate = normalRandom(8, 12)  -- 自己高回复
         self.hasBerserk = false
-        self.radius = 16
+        self.radius = 11  -- 缩小（16→11）
         self.isHealer = true
         self.healRange = 120  -- 治疗范围
         self.healRate = normalRandom(15, 25)  -- 治疗速度
@@ -145,14 +145,14 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(50, 70)
         self.attackDamage = normalRandom(35, 50)  -- 高伤害
-        self.attackRange = normalRandom(60, 80)  -- 短射程
+        self.attackRange = normalRandom(90, 120)  -- 增加射程（60-80→90-120）
         self.attackSpeed = normalRandom(2.0, 2.5)  -- 攻击慢
         self.critChance = normalRandom(0.2, 0.3)
         self.dodgeChance = normalRandom(0.05, 0.1)
         self.armor = normalRandom(0.15, 0.25)
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 20
+        self.radius = 14  -- 缩小（20→14）
         self.isDemolisher = true
         self.splashRange = 80  -- 溅射范围
         self.baseDamageBonus = 2.0  -- 对基地和建筑2倍伤害
@@ -163,14 +163,14 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(80, 110)
         self.attackDamage = normalRandom(18, 28)
-        self.attackRange = normalRandom(220, 280)  -- 超远射程
+        self.attackRange = normalRandom(330, 420)  -- 增加射程（220-280→330-420）
         self.attackSpeed = normalRandom(1.0, 1.4)
         self.critChance = normalRandom(0.3, 0.45)
         self.dodgeChance = normalRandom(0.2, 0.3)
         self.armor = normalRandom(0.05, 0.15)
         self.hasRegen = false
         self.hasBerserk = false
-        self.radius = 17
+        self.radius = 12  -- 缩小（17→12）
         self.isRanger = true
         self.canMoveAndShoot = true  -- 可以边移动边射击
         
@@ -179,7 +179,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.maxHealth = self.health
         self.moveSpeed = normalRandom(60, 100)
         self.attackDamage = normalRandom(12, 22)
-        self.attackRange = normalRandom(80, 130)
+        self.attackRange = normalRandom(120, 195)  -- 增加射程（80-130→120-195）
         self.attackSpeed = normalRandom(0.7, 1.3)
         self.critChance = math.random() * 0.3
         self.dodgeChance = math.random() * 0.2
@@ -189,6 +189,7 @@ function Agent.new(x, y, team, color, unitClass)
         self.hasBerserk = math.random() < 0.3
         self.berserkThreshold = normalRandom(0.25, 0.4)
         self.isBerserk = false
+        self.radius = 13  -- 缩小（默认20→13）
     end
     
     -- 通用属性初始化
@@ -258,9 +259,6 @@ function Agent.new(x, y, team, color, unitClass)
     self.goalState = {
         attacking = true  -- 目标是攻击敌人或基地
     }
-    
-    -- 士气系统
-    self.moraleRatio = 1.0  -- 初始满士气
     
     -- 引用
     self.target = nil
@@ -624,31 +622,6 @@ function Agent:updateWorldState()
         totalAllies = totalAllies + 1
         if ally ~= self and ally.health > 0 and not ally.isDead then
             aliveAllies = aliveAllies + 1
-        end
-    end
-    
-    -- 计算并保存士气比率（供draw函数使用）
-    self.moraleRatio = totalAllies > 1 and (aliveAllies / (totalAllies - 1)) or 1.0
-    
-    -- 士气影响：盟友越多，士气越高（1.0 - 1.3倍加成）
-    if totalAllies > 1 then
-        local moraleBoost = 1.0 + (aliveAllies / (totalAllies - 1)) * 0.3
-        -- 暂存原始值以便每次更新
-        if not self.baseDamage then
-            self.baseDamage = self.attackDamage / (self.isBerserk and 1.5 or 1.0)
-        end
-        -- 只在非狂暴状态应用士气加成
-        if not self.isBerserk then
-            local oldDamage = self.attackDamage
-            self.attackDamage = self.baseDamage * moraleBoost
-            -- 士气变化较大时输出日志
-            if math.abs(moraleBoost - 1.0) > 0.15 and not self.lastMoraleLog or 
-               math.abs((self.lastMoraleLog or 1.0) - moraleBoost) > 0.1 then
-                print(string.format("[%s] Morale: %.0f%% (Allies: %d/%d, DMG: %.1f -> %.1f)", 
-                    self.team, self.moraleRatio * 100, aliveAllies, totalAllies - 1,
-                    self.baseDamage, self.attackDamage))
-                self.lastMoraleLog = moraleBoost
-            end
         end
     end
 end
@@ -1043,9 +1016,6 @@ function Agent:draw()
         return
     end
     
-    -- 使用之前计算好的士气比率，如果没有则默认为1.0
-    local moraleRatio = self.moraleRatio or 1.0
-    
     -- 移动摇摆动画
     local bobOffset = 0
     local time = love.timer.getTime()
@@ -1092,10 +1062,9 @@ function Agent:draw()
         love.graphics.circle("line", self.x, self.y + bobOffset, self.radius + 6)
     end
     
-    -- 绘制攻击范围圈（半透明，士气影响透明度）
+    -- 绘制攻击范围圈（半透明）
     if self.currentAction and self.currentAction.name == "AttackEnemy" then
-        local rangeAlpha = 0.1 * (0.5 + moraleRatio * 0.5)
-        love.graphics.setColor(self.color[1], self.color[2], self.color[3], rangeAlpha)
+        love.graphics.setColor(self.color[1], self.color[2], self.color[3], 0.1)
         love.graphics.circle("fill", self.x, self.y + bobOffset, self.attackRange)
     end
     
@@ -1103,8 +1072,7 @@ function Agent:draw()
     if self.attackEffect then
         local progress = self.attackEffect.time / 0.3
         local alpha = 1 - progress
-        
-        -- 攻击闪光线
+                -- 攻击闪光线
         love.graphics.setColor(1, 1, 0.3, alpha * 0.6)
         love.graphics.setLineWidth(5)
         love.graphics.line(self.x, self.y + bobOffset, self.attackEffect.targetX, self.attackEffect.targetY)
@@ -1124,9 +1092,6 @@ function Agent:draw()
         bodyColor = {1, 1, 1}
     end
     
-    -- 士气影响：低士气时身体颜色变暗
-    local moraleColorMod = 0.6 + moraleRatio * 0.4
-    
     -- 狂暴状态发光
     if self.isBerserk then
         local pulse = 0.3 + math.sin(time * 10) * 0.2
@@ -1136,13 +1101,6 @@ function Agent:draw()
             math.min(1, bodyColor[1] + 0.3),
             bodyColor[2] * 0.7,
             bodyColor[3] * 0.7
-        }
-    else
-        -- 非狂暴状态才应用士气颜色影响
-        bodyColor = {
-            bodyColor[1] * moraleColorMod,
-            bodyColor[2] * moraleColorMod,
-            bodyColor[3] * moraleColorMod
         }
     end
     
@@ -1349,23 +1307,6 @@ function Agent:draw()
         love.graphics.setColor(1, 0, 0)
     end
     love.graphics.rectangle("fill", barX, barY, barWidth * healthPercent, barHeight)
-    
-    -- 士气条（在血条下方）
-    local moraleBarY = barY + barHeight + 2
-    love.graphics.setColor(0.2, 0.2, 0.2)
-    love.graphics.rectangle("fill", barX, moraleBarY, barWidth, 3)
-    
-    -- 士气颜色渐变：红->黄->绿
-    local moraleColor
-    if moraleRatio > 0.7 then
-        moraleColor = {0, 1, 0}  -- 绿色（高士气）
-    elseif moraleRatio > 0.4 then
-        moraleColor = {1, 1, 0}  -- 黄色（中等）
-    else
-        moraleColor = {1, 0.3, 0}  -- 橙红色（低士气）
-    end
-    love.graphics.setColor(moraleColor)
-    love.graphics.rectangle("fill", barX, moraleBarY, barWidth * moraleRatio, 3)
     
     -- 绘制伤害数字
     for _, dmg in ipairs(self.damageNumbers) do
